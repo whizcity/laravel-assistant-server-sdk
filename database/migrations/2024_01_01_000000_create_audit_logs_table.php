@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id();
+            $table->ulid('event_id')->unique();
             $table->string('service', 64)->index();
             $table->string('action', 16);                 // create / update / delete
             $table->string('resource', 64)->index();

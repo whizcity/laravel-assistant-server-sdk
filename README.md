@@ -162,6 +162,7 @@ $collector->get('123');
 
 - `POST /api/v1/audit/logs` — 单条同步，Body 为 JSON 对象
 - `POST /api/v1/audit/logs/batch` — 批量同步（推荐），Body 为 JSON 数组
+- 每条记录带客户端生成的 `event_id`（ULID），collector 以其为幂等键（重试重推同批不产生重复入库），并作为中心侧唯一锚点
 - `GET /api/v1/audit/logs/{id}` — 单条查询
 - `GET /api/v1/audit/logs` — 查询/回拉，过滤参数放在 query string
 - OCR：`POST /api/v1/ocr` — multipart/form-data，字段 `file`（jpg/png/bmp/webp/tiff），可选 `return_word_box`
@@ -177,6 +178,7 @@ $collector->get('123');
 
 ```json
 {
+  "event_id": "01HV4ZJ3KF7XY98ZXNQFS11JJ9",
   "service": "order-service",
   "action": "update",
   "resource": "orders",

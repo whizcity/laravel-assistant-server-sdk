@@ -59,6 +59,7 @@ final class SyncAuditLogsCommandTest extends TestCase
     private function makeLog(array $overrides = []): AuditLog
     {
         return AuditLog::create(array_merge([
+            'event_id' => '01HV4ZJ3KF7XY98ZXNQFS11JJ9',
             'service' => 'order-service',
             'action' => 'update',
             'resource' => 'orders',
@@ -84,7 +85,7 @@ final class SyncAuditLogsCommandTest extends TestCase
             '{"accepted":2,"failed":0}',
         ));
         $a = $this->makeLog(['operator_name' => '王五']);
-        $b = $this->makeLog(['resource_id' => '456']);
+        $b = $this->makeLog(['resource_id' => '456', 'event_id' => '01HV4ZJ49YXVZFSBNBH3Y1JCZC']);
 
         $this->artisan('audit:sync')
             ->expectsOutputToContain('Synced 2 logs')
@@ -98,6 +99,7 @@ final class SyncAuditLogsCommandTest extends TestCase
 
         $body = json_decode((string) $request->getBody(), true);
         $this->assertSame([
+            'event_id' => '01HV4ZJ3KF7XY98ZXNQFS11JJ9',
             'service' => 'order-service',
             'action' => 'update',
             'resource' => 'orders',

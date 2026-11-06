@@ -4,6 +4,7 @@ namespace Whizcity\AssistantServer\Audit\Traits;
 
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 trait Auditable
 {
@@ -76,6 +77,7 @@ trait Auditable
         }
 
         AuditLog::create([
+            'event_id'    => (string) Str::ulid(),
             'service'     => config('audit.service'),
             'action'      => $action,
             'resource'    => $this->getTable(),

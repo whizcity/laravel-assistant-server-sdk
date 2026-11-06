@@ -72,6 +72,18 @@ final class AuditableTraitTest extends TestCase
         $this->assertSame('昵称张', $row->operator_name);
     }
 
+    public function test_created_rows_carry_a_unique_ulid_event_id(): void
+    {
+        TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
+        TestAuditSubject::create(['title' => '订单二', 'status' => 'paid']);
+
+        $rows = AuditLog::query()->latest('id')->limit(2)->get();
+        $this->assertCount(2, $rows);
+        $this->assertMatchesRegularExpression('/^[0-9A-HJKMNP-TV-Z]{26}$/', $rows[0]->event_id);
+        $this->assertMatchesRegularExpression('/^[0-9A-HJKMNP-TV-Z]{26}$/', $rows[1]->event_id);
+        $this->assertNotSame($rows[0]->event_id, $rows[1]->event_id);
+    }
+
     public function test_guest_actions_leave_operator_fields_null(): void
     {
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);

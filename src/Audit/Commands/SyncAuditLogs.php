@@ -32,6 +32,7 @@ class SyncAuditLogs extends Command
 
         $payload = $logs->map(function (AuditLog $log) {
             return [
+                'event_id'    => $log->event_id,
                 'service'     => $log->service,
                 'action'      => $log->action,
                 'resource'    => $log->resource,
