@@ -69,15 +69,15 @@ class SyncAuditLogs extends Command
             return self::FAILURE;
         }
 
-        // Exponential backoff per row: after attempt N the next attempt waits
-        // retry_wait_minutes * 2^(N-1) (2, 4, 8, ... by default). Rows cooling
-        // down are skipped by the gate above and retried when their time is up.
-        $waitMinutes = (int) config('audit.retry_wait_minutes', 2);
+        // Exponential-free backoff ladder (industry style, e.g. webhook and
+        // Sidekiq-style explicit schedules): after attempt N the next attempt
+        // waits RETRY_LADDER_MINUTES[N-1] minutes. Rows cooling down are
+        // skipped by the gate above and retried when their time is up.
         foreach ($logs as $log) {
             $attempts = $log->retry_count + 1;
             $log->update([
                 'retry_count'   => $attempts,
-                'next_retry_at' => now()->addMinutes($waitMinutes * 2 ** ($attempts - 1)),
+                'next_retry_at' => now()->addMinutes($this->retryWaitMinutes($attempts)),
             ]);
         }
 
@@ -88,5 +88,18 @@ class SyncAuditLogs extends Command
 
         $this->error("Sync failed: {$result->getCode()} {$result->getMessage()}");
         return self::FAILURE;
+    }
+
+    /**
+     * Escalating retry schedule in minutes — an industry-style explicit
+     * ladder (as used by webhook retry systems and Sidekiq's default
+     * backoff table) rather than strict doubling: 2, 5, 15, 30, 60.
+     * Attempts past the table clamp to the last entry.
+     */
+    private function retryWaitMinutes(int $attempts): int
+    {
+        $ladderMinutes = [2, 5, 15, 30, 60];
+
+        return $ladderMinutes[min(max($attempts, 1), count($ladderMinutes)) - 1];
     }
 }

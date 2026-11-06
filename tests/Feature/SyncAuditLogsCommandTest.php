@@ -182,8 +182,27 @@ final class SyncAuditLogsCommandTest extends TestCase
         $log->refresh();
         $this->assertSame(2, $log->retry_count);
         $minutes = $before->floatDiffInMinutes($log->next_retry_at);
-        $this->assertGreaterThan(3.9, $minutes);
-        $this->assertLessThan(4.1, $minutes);
+        $this->assertGreaterThan(4.9, $minutes);
+        $this->assertLessThan(5.1, $minutes);
+    }
+
+    public function test_backoff_escalates_beyond_double_on_later_attempts(): void
+    {
+        $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(
+            500,
+            ['Content-Type' => 'application/json'],
+            '{"code":"HTTP_ERROR","message":"save failed"}',
+        ));
+        $before = now();
+        $log = $this->makeLog(['retry_count' => 2, 'next_retry_at' => '2023-01-01 00:00:00']);
+
+        $this->artisan('audit:sync')->assertExitCode(1);
+
+        $log->refresh();
+        $this->assertSame(3, $log->retry_count);
+        $minutes = $before->floatDiffInMinutes($log->next_retry_at);
+        $this->assertGreaterThan(14.9, $minutes);
+        $this->assertLessThan(15.1, $minutes);
     }
 
     public function test_rows_waiting_out_the_backoff_are_not_picked_up(): void

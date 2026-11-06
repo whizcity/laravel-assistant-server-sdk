@@ -16,11 +16,10 @@ return [
     | Retry
     |--------------------------------------------------------------------------
     |
-    | Exponential backoff after a failed batch sync: attempt N is followed by
-    | retry_wait_minutes * 2^(N-1) minutes (2 / 4 / 8 / ... minutes).
+    | Backoff waits follow the fixed ladder baked into SyncAuditLogs
+    | (2 / 5 / 15 / 30 / 60 minutes per failed attempt), not a config knob.
     |
     */
-    'retry_wait_minutes' => 2,
     'max_retry' => 5,
 
     /*
