@@ -33,7 +33,7 @@ class AuditLog extends Model
     protected $casts = [
         'before'        => 'array',
         'after'         => 'array',
-        'synced'        => 'boolean',
+        'synced'        => 'integer',
         'synced_at'     => 'datetime',
         'retry_count'   => 'integer',
         'next_retry_at' => 'datetime',

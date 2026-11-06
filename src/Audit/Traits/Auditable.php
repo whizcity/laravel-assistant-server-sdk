@@ -90,7 +90,7 @@ trait Auditable
             'trace_id'    => request()?->header('X-Trace-Id')
                               ?? request()?->header('X-Request-Id'),
             'user_agent'  => request()?->userAgent(),
-            'synced'      => false,
+            'synced'      => 0,
             'created_at'  => now(),
         ]);
     }

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->json('after')->nullable();
             $table->string('trace_id', 64)->nullable()->index();
             $table->string('user_agent')->nullable();
-            $table->boolean('synced')->default(false)->index();
+            $table->tinyInteger('synced')->default(0)->index();
             $table->timestamp('synced_at')->nullable();
             $table->unsignedTinyInteger('retry_count')->default(0);
             $table->timestamp('next_retry_at')->nullable();

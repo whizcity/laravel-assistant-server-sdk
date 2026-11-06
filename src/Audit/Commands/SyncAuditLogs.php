@@ -9,53 +9,59 @@ use Illuminate\Support\Facades\Log;
 
 class SyncAuditLogs extends Command
 {
-    protected $signature = 'audit:sync {--limit=300 : Number of rows to sync per run}';
+    protected $signature = "audit:sync {--limit=300 : Number of rows to sync per run}";
 
-    protected $description = 'Batch push unsynced local audit logs to the central collector';
+    protected $description = "Batch push unsynced local audit logs to the central collector";
 
     public function handle(AuditCollectorClient $client): int
     {
-        $limit    = (int) $this->option('limit');
-        $maxRetry = (int) config('audit.max_retry', 5);
+        $limit = (int) $this->option("limit");
+        $maxRetry = (int) config("audit.max_retry", 5);
 
         $logs = AuditLog::query()
-            ->where('synced', false)
-            ->where('retry_count', '<', $maxRetry)
-            ->where(fn ($q) => $q->whereNull('next_retry_at')
-                ->orWhere('next_retry_at', '<=', now()))
-            ->orderBy('id')
+            ->where("synced", 0)
+            ->where("retry_count", "<", $maxRetry)
+            ->where(
+                fn($q) => $q
+                    ->whereNull("next_retry_at")
+                    ->orWhere("next_retry_at", "<=", now()),
+            )
+            ->orderBy("id")
             ->limit($limit)
             ->get();
 
         if ($logs->isEmpty()) {
-            $this->info('No pending audit logs');
+            $this->info("No pending audit logs");
             return self::SUCCESS;
         }
 
-        $payload = $logs->map(function (AuditLog $log) {
-            return [
-                'event_id'    => $log->event_id,
-                'service'     => $log->service,
-                'action'      => $log->action,
-                'resource'    => $log->resource,
-                'resource_id' => $log->resource_id,
-                'operator_id' => $log->operator_id,
-                'operator_name' => $log->operator_name,
-                'operator_ip' => $log->operator_ip,
-                'before'      => $log->before,
-                'after'       => $log->after,
-                'trace_id'    => $log->trace_id,
-                'user_agent'  => $log->user_agent,
-                'created_at'  => $log->created_at?->toISOString(),
-            ];
-        })->values()->all();
+        $payload = $logs
+            ->map(function (AuditLog $log) {
+                return [
+                    "event_id" => $log->event_id,
+                    "service" => $log->service,
+                    "action" => $log->action,
+                    "resource" => $log->resource,
+                    "resource_id" => $log->resource_id,
+                    "operator_id" => $log->operator_id,
+                    "operator_name" => $log->operator_name,
+                    "operator_ip" => $log->operator_ip,
+                    "before" => $log->before,
+                    "after" => $log->after,
+                    "trace_id" => $log->trace_id,
+                    "user_agent" => $log->user_agent,
+                    "created_at" => $log->created_at?->toISOString(),
+                ];
+            })
+            ->values()
+            ->all();
 
         $result = $client->syncBatch($payload);
 
         if ($result->isSuccess()) {
-            AuditLog::whereIn('id', $logs->pluck('id'))->update([
-                'synced'    => true,
-                'synced_at' => now(),
+            AuditLog::whereIn("id", $logs->pluck("id"))->update([
+                "synced" => 1,
+                "synced_at" => now(),
             ]);
 
             $this->info("Synced {$logs->count()} logs");
@@ -64,7 +70,7 @@ class SyncAuditLogs extends Command
 
         // Configuration gaps are persistent and unaffected by retries: report
         // directly, without burning retry_count on the rows.
-        if ($result->getCode() === 'CONFIG_ERROR') {
+        if ($result->getCode() === "CONFIG_ERROR") {
             $this->error($result->getMessage());
             return self::FAILURE;
         }
@@ -76,17 +82,21 @@ class SyncAuditLogs extends Command
         foreach ($logs as $log) {
             $attempts = $log->retry_count + 1;
             $log->update([
-                'retry_count'   => $attempts,
-                'next_retry_at' => now()->addMinutes($this->retryWaitMinutes($attempts)),
+                "retry_count" => $attempts,
+                "next_retry_at" => now()->addMinutes(
+                    $this->retryWaitMinutes($attempts),
+                ),
             ]);
         }
 
-        Log::warning('Audit batch sync failed', [
-            'code'    => $result->getCode(),
-            'message' => $result->getMessage(),
+        Log::warning("Audit batch sync failed", [
+            "code" => $result->getCode(),
+            "message" => $result->getMessage(),
         ]);
 
-        $this->error("Sync failed: {$result->getCode()} {$result->getMessage()}");
+        $this->error(
+            "Sync failed: {$result->getCode()} {$result->getMessage()}",
+        );
         return self::FAILURE;
     }
 
@@ -100,6 +110,8 @@ class SyncAuditLogs extends Command
     {
         $ladderMinutes = [2, 5, 15, 30, 60];
 
-        return $ladderMinutes[min(max($attempts, 1), count($ladderMinutes)) - 1];
+        return $ladderMinutes[
+            min(max($attempts, 1), count($ladderMinutes)) - 1
+        ];
     }
 }

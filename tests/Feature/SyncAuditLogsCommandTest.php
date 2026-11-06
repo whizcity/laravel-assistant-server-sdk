@@ -71,7 +71,7 @@ final class SyncAuditLogsCommandTest extends TestCase
             'after' => ['status' => 'paid'],
             'trace_id' => 'abc-123',
             'user_agent' => 'UA/1.0',
-            'synced' => false,
+            'synced' => 0,
             'retry_count' => 0,
             'created_at' => '2024-05-06 10:00:00',
         ], $overrides));
@@ -115,8 +115,8 @@ final class SyncAuditLogsCommandTest extends TestCase
         ], $body[0]);
         $this->assertSame('456', $body[1]['resource_id']);
 
-        $this->assertTrue((bool) $a->refresh()->synced);
-        $this->assertTrue((bool) $b->refresh()->synced);
+        $this->assertSame(1, $a->refresh()->synced);
+        $this->assertSame(1, $b->refresh()->synced);
         $this->assertNotNull($a->refresh()->synced_at);
     }
 
@@ -131,7 +131,7 @@ final class SyncAuditLogsCommandTest extends TestCase
 
         $this->artisan('audit:sync')->assertExitCode(1);
 
-        $this->assertFalse((bool) $log->refresh()->synced);
+        $this->assertSame(0, $log->refresh()->synced);
         $this->assertSame(1, $log->refresh()->retry_count);
     }
 
@@ -144,7 +144,7 @@ final class SyncAuditLogsCommandTest extends TestCase
         $this->artisan('audit:sync')->assertExitCode(1);
 
         $this->assertCount(0, self::$sent);
-        $this->assertFalse((bool) $log->refresh()->synced);
+        $this->assertSame(0, $log->refresh()->synced);
         $this->assertSame(0, $log->refresh()->retry_count);
     }
 

@@ -25,7 +25,7 @@ class CleanSyncedAuditLogs extends Command
 
         do {
             $ids = AuditLog::query()
-                ->where('synced', true)
+                ->where('synced', 1)
                 ->where('synced_at', '<', $threshold)
                 ->orderBy('id')
                 ->limit($limit)
