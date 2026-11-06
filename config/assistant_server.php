@@ -12,17 +12,7 @@ return [
     | Example: http://assistant-server:8080
     |
     */
-    'address' => env('ASSISTANT_SERVER_ADDRESS', (function () {
-        // 旧变量 AUDIT_ENDPOINT 语义是"完整路径前缀"（如 http://host:8080/api/v1/logs），
-        // 兼容期从中剥出服务地址。
-        $endpoint = env('AUDIT_ENDPOINT');
-        if (empty($endpoint) || ($parts = parse_url($endpoint)) === false || empty($parts['host'])) {
-            return null;
-        }
-        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-
-        return ($parts['scheme'] ?? 'http') . '://' . $parts['host'] . $port;
-    })()),
+    'address' => env('ASSISTANT_SERVER_ADDRESS'),
 
     /*
     |--------------------------------------------------------------------------
