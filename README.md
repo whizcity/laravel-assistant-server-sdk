@@ -34,7 +34,7 @@ Model (use Auditable)
 
 ## 安装
 
-私有库（GitHub 仓库 `whizcity/laravel-assistant-server-sdk`），未发布 Packagist，消费方需先登记 VCS 仓库再安装。
+私有库（GitHub 仓库 `whizcity/laravel-assistant-server-sdk`），未发布 Packagist，消费方需先登记 VCS 仓库再安装。公司环境的机器普遍预置了 GitHub SSH 凭证，**SSH URL 直接可拉，免 token**。
 
 **1. 消费方项目登记仓库**（composer.json 的 `repositories` 加一条）：
 
@@ -42,22 +42,18 @@ Model (use Auditable)
 "repositories": [
   {
     "type": "vcs",
-    "url": "https://github.com/whizcity/laravel-assistant-server-sdk.git"
+    "url": "git@github.com:whizcity/laravel-assistant-server-sdk.git"
   }
 ]
 ```
 
-**2. 配置 GitHub 访问 token**（首次机器一次性操作；CI 用环境变量，见下）：
-
-```bash
-composer config -g github-oauth.github.com ghp_your_token
-```
-
-**3. 安装**：
+**2. 安装**：
 
 ```bash
 composer require whizcity/assistant-server
 ```
+
+极少数用不了 SSH 的环境（如临时 CI 容器没有 deploy key），改用 HTTPS URL + token 兜底：`repositories` 的 url 换成 `https://github.com/whizcity/laravel-assistant-server-sdk.git`，机器上一次性 `composer config -g github-oauth.github.com ghp_your_token`；CI 里用 `COMPOSER_AUTH={"github-oauth":{"github.com":"ghp_your_token"}}` 环境变量。
 
 发布配置（可选）：
 
@@ -66,12 +62,6 @@ php artisan vendor:publish --tag=assistant-server-config
 php artisan vendor:publish --tag=audit-config
 php artisan vendor:publish --tag=audit-migrations
 php artisan migrate
-```
-
-**CI 里不用写 token 配置文件**，用 `COMPOSER_AUTH` 环境变量：
-
-```env
-COMPOSER_AUTH={"github-oauth":{"github.com":"ghp_your_token"}}
 ```
 
 版本约定：本仓库打 git tag（如 `v0.1.0`）即为可锁定版本；开发版用 `dev-main` 引用。
