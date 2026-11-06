@@ -21,6 +21,8 @@ class SyncAuditLogs extends Command
         $logs = AuditLog::query()
             ->where('synced', false)
             ->where('retry_count', '<', $maxRetry)
+            ->where(fn ($q) => $q->whereNull('next_retry_at')
+                ->orWhere('next_retry_at', '<=', now()))
             ->orderBy('id')
             ->limit($limit)
             ->get();
@@ -67,7 +69,17 @@ class SyncAuditLogs extends Command
             return self::FAILURE;
         }
 
-        AuditLog::whereIn('id', $logs->pluck('id'))->increment('retry_count');
+        // Exponential backoff per row: after attempt N the next attempt waits
+        // retry_wait_minutes * 2^(N-1) (2, 4, 8, ... by default). Rows cooling
+        // down are skipped by the gate above and retried when their time is up.
+        $waitMinutes = (int) config('audit.retry_wait_minutes', 2);
+        foreach ($logs as $log) {
+            $attempts = $log->retry_count + 1;
+            $log->update([
+                'retry_count'   => $attempts,
+                'next_retry_at' => now()->addMinutes($waitMinutes * 2 ** ($attempts - 1)),
+            ]);
+        }
 
         Log::warning('Audit batch sync failed', [
             'code'    => $result->getCode(),

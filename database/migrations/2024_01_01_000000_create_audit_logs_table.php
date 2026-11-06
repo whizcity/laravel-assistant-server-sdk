@@ -25,6 +25,7 @@ return new class extends Migration
             $table->boolean('synced')->default(false)->index();
             $table->timestamp('synced_at')->nullable();
             $table->unsignedTinyInteger('retry_count')->default(0);
+            $table->timestamp('next_retry_at')->nullable();
             $table->timestamp('created_at')->useCurrent()->index();
 
             $table->index(['synced', 'id']);

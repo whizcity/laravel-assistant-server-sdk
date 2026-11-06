@@ -26,14 +26,17 @@ class AuditLog extends Model
         'synced',
         'synced_at',
         'retry_count',
+        'next_retry_at',
         'created_at',
     ];
 
     protected $casts = [
-        'before'     => 'array',
-        'after'      => 'array',
-        'synced'     => 'boolean',
-        'synced_at'  => 'datetime',
-        'created_at' => 'datetime',
+        'before'        => 'array',
+        'after'         => 'array',
+        'synced'        => 'boolean',
+        'synced_at'     => 'datetime',
+        'retry_count'   => 'integer',
+        'next_retry_at' => 'datetime',
+        'created_at'    => 'datetime',
     ];
 }

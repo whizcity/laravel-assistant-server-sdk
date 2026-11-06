@@ -148,6 +148,82 @@ final class SyncAuditLogsCommandTest extends TestCase
         $this->assertSame(0, $log->refresh()->retry_count);
     }
 
+    public function test_first_failure_waits_two_minutes_before_retry(): void
+    {
+        $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(
+            500,
+            ['Content-Type' => 'application/json'],
+            '{"code":"HTTP_ERROR","message":"save failed"}',
+        ));
+        $before = now();
+        $log = $this->makeLog();
+
+        $this->artisan('audit:sync')->assertExitCode(1);
+
+        $log->refresh();
+        $this->assertSame(1, $log->retry_count);
+        $minutes = $before->floatDiffInMinutes($log->next_retry_at);
+        $this->assertGreaterThan(1.9, $minutes);
+        $this->assertLessThan(2.1, $minutes);
+    }
+
+    public function test_backoff_doubles_with_each_failed_attempt(): void
+    {
+        $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(
+            500,
+            ['Content-Type' => 'application/json'],
+            '{"code":"HTTP_ERROR","message":"save failed"}',
+        ));
+        $before = now();
+        $log = $this->makeLog(['retry_count' => 1, 'next_retry_at' => '2023-01-01 00:00:00']);
+
+        $this->artisan('audit:sync')->assertExitCode(1);
+
+        $log->refresh();
+        $this->assertSame(2, $log->retry_count);
+        $minutes = $before->floatDiffInMinutes($log->next_retry_at);
+        $this->assertGreaterThan(3.9, $minutes);
+        $this->assertLessThan(4.1, $minutes);
+    }
+
+    public function test_rows_waiting_out_the_backoff_are_not_picked_up(): void
+    {
+        $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(200, [], '{"accepted":1,"failed":0}'));
+        $log = $this->makeLog(['retry_count' => 1, 'next_retry_at' => now()->addMinutes(10)]);
+
+        $this->artisan('audit:sync')->assertSuccessful();
+
+        $this->assertCount(0, self::$sent);
+        $this->assertSame(1, $log->refresh()->retry_count);
+    }
+
+    public function test_cooled_rows_sync_while_hot_rows_stay_backing_off(): void
+    {
+        $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(
+            500,
+            ['Content-Type' => 'application/json'],
+            '{"code":"HTTP_ERROR","message":"save failed"}',
+        ));
+        $cooled = $this->makeLog(['retry_count' => 1, 'next_retry_at' => '2023-01-01 00:00:00']);
+        $hot = $this->makeLog([
+            'event_id' => '01HV4ZJ49YXVZFSBNBH3Y1JCZD',
+            'resource_id' => '456',
+            'retry_count' => 1,
+            'next_retry_at' => now()->addMinutes(10),
+        ]);
+
+        $this->artisan('audit:sync')->assertExitCode(1);
+
+        $this->assertCount(1, self::$sent);
+        $body = json_decode((string) self::$sent[0]->getBody(), true);
+        $this->assertCount(1, $body);
+        $this->assertSame($cooled->resource_id, $body[0]['resource_id']);
+
+        $this->assertSame(2, $cooled->refresh()->retry_count);
+        $hot->refresh();
+        $this->assertSame(1, $hot->retry_count);
+    }
+
     public function test_no_pending_logs_short_circuits_without_sending(): void
     {
         $this->bindCollector(fn () => new GuzzleHttp\Psr7\Response(200, [], '{}'));
