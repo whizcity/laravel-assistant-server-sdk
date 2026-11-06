@@ -1,0 +1,41 @@
+{
+  "name": "whizcity/assistant-server",
+  "description": "Laravel SDK client for the assistant-server (One-Time HMAC signature authentication, audit logging, OCR, and other modules)",
+  "type": "library",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Whizcity",
+      "email": "dev@whizcity.com"
+    }
+  ],
+  "require": {
+    "php": "^8.4",
+    "illuminate/support": "^12.0",
+    "illuminate/database": "^12.0",
+    "illuminate/console": "^12.0",
+    "illuminate/http": "^12.0",
+    "guzzlehttp/guzzle": "^7.9"
+  },
+  "autoload": {
+    "psr-4": {
+      "Whizcity\\AssistantServer\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Whizcity\\AssistantServer\\AssistantServerServiceProvider"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "require-dev": {
+    "phpunit/phpunit": "^12.0",
+    "orchestra/testbench": "^10.0"
+  }
+}
