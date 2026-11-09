@@ -52,7 +52,8 @@ class SyncAuditLogs extends Command
             ->values()
             ->all();
 
-        // 服务端 AuditBatch 期望信封 {"events": [...]}，1~500 条、批内 event_id 去重。
+        // The server-side AuditBatch expects the envelope {"events": [...]}: 1-500
+        // rows, event_id unique within each batch.
         $result = $client->syncBatch(["events" => $payload]);
 
         if ($result->isSuccess()) {

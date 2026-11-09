@@ -4,9 +4,10 @@ use PHPUnit\Framework\TestCase;
 use Whizcity\AssistantServer\Client\Signer;
 
 /**
- * 期望值直接取自服务端实现（assistant-server /app/auth/signature.py），
- * 固定输入、固定输出：任何一端改动导致 six-field canonical 或 HMAC 计算漂移，
- * 这里的字面量断言就会抓住它。期望值的推导不经过被测代码。
+ * Expected values come straight from the server implementation
+ * (assistant-server /app/auth/signature.py): fixed input, fixed output.
+ * If either side drifts the six-field canonical or the HMAC computation,
+ * these literal assertions catch it. Never derived via the code under test.
  */
 final class SignerTest extends TestCase
 {
@@ -51,8 +52,8 @@ final class SignerTest extends TestCase
 
     public function test_defaults_use_unix_seconds_and_a_server_acceptable_nonce(): void
     {
-        // 服务端把 >= 10^10 的值按毫秒拒绝（TIMESTAMP_INVALID），把
-        // 不满足 [A-Za-z0-9_-]{8,64} 的随机数拒绝（SIGNATURE_INVALID）。
+        // The server rejects values >= 10^10 as milliseconds (TIMESTAMP_INVALID)
+        // and nonces not matching [A-Za-z0-9_-]{8,64} (SIGNATURE_INVALID).
         $headers = Signer::headers('app', 'secret', 'POST', '/api/v1/audit/logs', '{}');
 
         $this->assertMatchesRegularExpression('/^\d{1,10}$/', $headers[Signer::HEADER_TIMESTAMP]);

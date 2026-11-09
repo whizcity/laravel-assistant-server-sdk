@@ -7,9 +7,10 @@ use Whizcity\AssistantServer\AssistantServerServiceProvider;
 use Whizcity\AssistantServer\Client\AuditCollectorClient;
 
 /**
- * 通过 Guzzle handler 在 transport 边界抓取真实发出的 PSR-7 请求。
- * 签名期望值由观察到的头 + 标准 hash 函数独立推导，不调用 Signer，
- * 专门抓住「签的东西 ≠ 发出去的东西」这类 bug。
+ * Captures the real outgoing PSR-7 request at the transport boundary via a
+ * Guzzle handler. Expected signatures are derived independently from the
+ * observed headers plus standard hash functions, without calling Signer —
+ * built to catch "signed thing ≠ sent thing" class bugs.
  */
 final class AuditCollectorClientTest extends TestCase
 {

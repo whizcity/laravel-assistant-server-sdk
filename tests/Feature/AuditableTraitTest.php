@@ -9,10 +9,11 @@ use Whizcity\AssistantServer\Audit\Models\AuditLog;
 use Whizcity\AssistantServer\Audit\Traits\Auditable;
 
 /**
- * Trait 行为：事件落库即快照。operator_id / operator_name 取自请求上
- * 中间件注入的 actor 快照（数组，含 id / nickname），键名由
- * assistant_server.audit.user_info_key 配置（默认 user）；无快照时
- * 视作非后台管理员操作（CLI/队列上下文），事件不落库。
+ * Trait behavior: each event lands as one audit row. operator_id /
+ * operator_name come from the actor snapshot injected by the middleware
+ * (array with id / nickname), keyed by assistant_server.audit.user_info_key
+ * (default user). Without a snapshot the event is treated as a non-admin
+ * action (CLI/queue context) and nothing is stored.
  */
 final class AuditableTraitTest extends TestCase
 {
@@ -48,7 +49,7 @@ final class AuditableTraitTest extends TestCase
 
     private function actor(array $snapshot): void
     {
-        // 消费方中间件的注入方式：$request->attributes->add([<配置的键名> => $user])
+        // How consuming middleware injects: $request->attributes->add([<configured key> => $user])
         request()->attributes->add([config('assistant_server.audit.user_info_key', 'user') => $snapshot]);
     }
 
@@ -90,7 +91,7 @@ final class AuditableTraitTest extends TestCase
 
     public function test_operations_without_actor_snapshot_are_not_audited(): void
     {
-        // 无快照 = 非后台管理员操作（CLI/队列/无请求上下文），事件不落库。
+        // No snapshot = not an admin-panel operation (CLI/queue/no request): skip.
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
 
         $this->assertCount(0, AuditLog::all());
@@ -98,9 +99,10 @@ final class AuditableTraitTest extends TestCase
 
     public function test_mass_query_builder_writes_are_audited_per_row(): void
     {
-        // query()->where(...)->update()/delete() 不依赖模型事件拿变化——
-        // 自定义 Builder 先抓 before 原像再执行原语句，随后逐行落审计；
-        // 实例 save 同走 Builder::update()，靠调用栈区分避免重复记账。
+        // query()->where(...)->update()/delete() cannot rely on model events:
+        // the custom Builder snapshots the before image first, runs the original
+        // statement, then records row by row. Instance saves go through the same
+        // Builder::update(); an explicit save-path flag prevents double recording.
         $this->actor(['id' => '9', 'nickname' => '张三']);
         TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
         TestAuditSubject::create(['title' => 'b', 'status' => 'draft']);
@@ -127,8 +129,9 @@ final class AuditableTraitTest extends TestCase
 
     public function test_mass_query_builder_writes_stay_silent_without_snapshot(): void
     {
-        // 无快照：语句照常执行（行真的被改/删），但不产生任何审计行，
-        // 也不在批量路径上崩溃（WeakMap 回归守护）。
+        // No snapshot: the statements still execute (rows really change/vanish),
+        // but no audit row is produced and the batch path must not crash
+        // (WeakMap regression guard).
         TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
         TestAuditSubject::create(['title' => 'b', 'status' => 'draft']);
 
@@ -143,8 +146,9 @@ final class AuditableTraitTest extends TestCase
 
     public function test_mass_insert_via_query_is_audited_unless_save_path(): void
     {
-        // 实例 create() 内部同样走 Builder::insert：save-path 旗挡住钩子路径，
-        // 只有显式的 query()->insertGetId() 才额外落一行。
+        // Instance create() routes through Builder::insert too: the save-path
+        // flag blocks the hook path, and only an explicit query()->insertGetId()
+        // records an extra row.
         $this->actor(['id' => '9', 'nickname' => '张三']);
         TestAuditSubject::create(['title' => '青山', 'status' => 'draft']);
 
@@ -157,7 +161,7 @@ final class AuditableTraitTest extends TestCase
         $this->assertNull($row->before);
         $this->assertSame(['title' => '外围', 'status' => 'paid'], $row->after);
 
-        $this->assertCount(2, AuditLog::all()); // 1 钩子(create()) + 1 批量 insertGetId
+        $this->assertCount(2, AuditLog::all()); // 1 hook (create()) + 1 batch insertGetId
     }
 
     public function test_mass_insert_records_and_stays_silent_without_snapshot(): void
@@ -169,7 +173,8 @@ final class AuditableTraitTest extends TestCase
 
     public function test_instance_save_records_exactly_once(): void
     {
-        // 实例 save 同样穿过自定义 Builder：调用栈守卫必须挡住双记账。
+        // Instance saves pass through the custom Builder just the same: the
+        // save-path guard must block double recording.
         $this->actor(['id' => '9', 'nickname' => '张三']);
         TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
 
@@ -183,7 +188,8 @@ final class AuditableTraitTest extends TestCase
 
     public function test_new_rows_are_immediately_eligible_for_sync(): void
     {
-        // next_retry_at 写入即填 now（不再用 NULL 表示从未失败），同步查询无需 whereNull。
+        // next_retry_at is filled with now() at write time (no more NULL =
+        // never failed), so the sync query needs no whereNull.
         $this->actor(['id' => '9', 'nickname' => '张三']);
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
 
@@ -194,7 +200,8 @@ final class AuditableTraitTest extends TestCase
 
     public function test_query_builder_writes_can_be_recorded_manually(): void
     {
-        // DB::table(...) 不触发 Eloquent 事件，钩子拿不到变化；旁路写入点手动补记。
+        // DB::table(...) fires no Eloquent events, hooks see nothing: record
+        // manually at these bypass call sites.
         $this->actor(['id' => '9', 'nickname' => '张三']);
         DB::table('audit_subjects')->insert(['id' => 3, 'title' => '旁路写入', 'status' => 'draft']);
         DB::table('audit_subjects')->where('id', 3)->update(['status' => 'paid']);
@@ -213,9 +220,9 @@ final class AuditableTraitTest extends TestCase
 
     public function test_manual_recorders_skip_rows_without_snapshot_and_empty_payloads(): void
     {
-        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // 无快照
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // no snapshot
         $this->actor(['id' => '9', 'nickname' => '张三']);
-        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', null, null); // 无变化数据
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', null, null); // nothing to record
 
         $this->assertCount(0, AuditLog::all());
     }

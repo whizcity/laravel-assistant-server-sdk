@@ -6,9 +6,10 @@ use Whizcity\AssistantServer\AssistantServerServiceProvider;
 use Whizcity\AssistantServer\Client\AssistantServerClient;
 
 /**
- * 通过 Guzzle handler 在 transport 边界抓取真实发出的 PSR-7 请求。
- * 签名期望值由观察到的头 + 标准 hash 函数独立推导，不调用 Signer，
- * 专门抓住「签的东西 ≠ 发出去的东西」这类 bug。
+ * Captures the real outgoing PSR-7 request at the transport boundary via a
+ * Guzzle handler. Expected signatures are derived independently from the
+ * observed headers plus standard hash functions, without calling Signer —
+ * built to catch "signed thing ≠ sent thing" class bugs.
  */
 final class AssistantServerClientTest extends TestCase
 {
@@ -67,12 +68,14 @@ final class AssistantServerClientTest extends TestCase
         $this->assertMatchesRegularExpression('#^multipart/form-data; boundary=.+#', $request->getHeaderLine('Content-Type'));
 
         $body = (string) $request->getBody();
-        // filename 与二进制字节进入 wire body，extra form 字段同样在场
+        // The filename and raw multipart bytes go into the wire body; the
+        // extra form fields are on board too.
         $this->assertStringContainsString('Content-Disposition: form-data; name="file"; filename="receipt.png"', $body);
         $this->assertStringContainsString('Content-Disposition: form-data; name="return_word_box"', $body);
         $this->assertStringContainsString('true', $body);
         $this->assertStringContainsString($png, $body);
-        // 签名就是实际发送的 multipart 原始字节摘要，与服务端验签口径一致
+        // The signature covers the exact raw multipart bytes sent on the wire,
+        // matching the server-side verification exactly.
         $this->assertSame(hash('sha256', $body), $request->getHeaderLine('X-Content-SHA256'));
         $this->assertSame($this->expectedSignature($request), $request->getHeaderLine('X-Signature'));
 

@@ -4,9 +4,10 @@ use PHPUnit\Framework\TestCase;
 use Whizcity\AssistantServer\Client\ResultCase;
 
 /**
- * 服务端契约（assistant-server /app/errors.py）：错误响应是
- * {"code","message"(,"details")}，正确的响应 body 本身无 code 字段。
- * 这些测试抓住：code 判定被改成按 HTTP 状态、getData 丢字段、message 类型漂移。
+ * Server contract (assistant-server /app/errors.py): an error body is
+ * {"code","message"(,"details")}; a success body has no code field.
+ * These tests catch: success judged by HTTP status, getData dropping
+ * fields, message type drift.
  */
 final class ResultCaseTest extends TestCase
 {

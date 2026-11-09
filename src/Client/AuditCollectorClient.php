@@ -8,10 +8,10 @@ namespace Whizcity\AssistantServer\Client;
  * change — call request() directly and add a named method here only when a
  * call site proves frequent.
  *
- * @method ResultCase sync(array $log)                POST a single audit log ("单条同步").
- * @method ResultCase syncBatch(array $logs)          POST a JSON array of audit logs ("批量同步").
- * @method ResultCase get(string $id, array $filters = []) GET one audit log by id ("单条").
- * @method ResultCase query(array $filters)           GET logs filtered by query string ("查询/回拉").
+ * @method ResultCase sync(array $log)                POST a single audit log (single-item sync).
+ * @method ResultCase syncBatch(array $logs)          POST a JSON array of audit logs (batch sync).
+ * @method ResultCase get(string $id, array $filters = []) GET one audit log by id (single item).
+ * @method ResultCase query(array $filters)           GET logs filtered by query string (query/pull back).
  */
 class AuditCollectorClient extends AssistantServerClient
 {

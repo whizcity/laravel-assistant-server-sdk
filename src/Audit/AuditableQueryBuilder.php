@@ -39,7 +39,7 @@ class AuditableQueryBuilder extends Builder
             $after = $this->model->auditFilterPayload($values) ?: [];
             foreach ($beforeRows as $key => $image) {
                 if ($image === null || $image === $after) {
-                    continue; // 敏感字段被清空 / 实际无变化，跳过
+                    continue; // payload emptied by sensitive-field filtering or no real change: skip
                 }
                 AuditLog::record(AuditAction::Update, $this->model->getTable(), $key, $image, $after);
             }
@@ -95,7 +95,7 @@ class AuditableQueryBuilder extends Builder
             foreach ($rows as $row) {
                 $after = $this->model->auditFilterPayload($row) ?: [];
                 if ($after === []) {
-                    continue; // 敏感字段被清空，跳过
+                    continue; // payload emptied by sensitive-field filtering: skip
                 }
                 AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $after);
             }

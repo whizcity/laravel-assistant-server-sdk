@@ -7,8 +7,9 @@ use Whizcity\AssistantServer\Client\AuditCollectorClient;
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
 
 /**
- * 命令层面集成：audit:sync 应当通过 AuditCollectorClient（一次性 HMAC 签名）
- * 批量推送，成功标记 synced，失败自增 retry_count。
+ * Command-level integration: audit:sync must push through AuditCollectorClient
+ * (one-time HMAC signatures) as a batch — mark rows synced on success, bump
+ * retry_count on failure.
  */
 final class SyncAuditLogsCommandTest extends TestCase
 {
@@ -98,7 +99,8 @@ final class SyncAuditLogsCommandTest extends TestCase
         $this->assertSame('demo-app', $request->getHeaderLine('X-App-Id'));
 
         $body = json_decode((string) $request->getBody(), true);
-        // 服务端 AuditBatch 是信封 {"events":[...]}（1~500 条、批内 event_id 去重）。
+        // Server AuditBatch is the envelope {"events":[...]}: 1-500 rows,
+        // event_id unique within each batch.
         $this->assertIsArray($body['events'] ?? null);
         $this->assertCount(2, $body['events']);
         $this->assertSame([
