@@ -3,6 +3,7 @@
 namespace Whizcity\AssistantServer\Audit\Traits;
 
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
+use Whizcity\AssistantServer\Audit\AuditableQueryBuilder;
 use Whizcity\AssistantServer\Audit\AuditAction;
 
 trait Auditable
@@ -66,6 +67,28 @@ trait Auditable
     /**
      * Persist one audit record to the local table. Never performs HTTP.
      */
+    /**
+     * Route every query() through AuditableQueryBuilder so mass
+     * update()/delete() get audited per row. Models that define their own
+     * newEloquentBuilder() keep the class method (silently wins over the
+     * trait) and lose query()-level auditing.
+     */
+    public function newEloquentBuilder($query): AuditableQueryBuilder
+    {
+        return new AuditableQueryBuilder($query);
+    }
+
+    public function hasActorSnapshot(): bool
+    {
+        return ! empty(request()?->get((string) config('assistant_server.audit.user_info_key', 'user')));
+    }
+
+    /** Exposes the shared sensitive-field filter to AuditableQueryBuilder. */
+    public function auditFilterPayload(?array $data): ?array
+    {
+        return $this->filterAuditFields($data);
+    }
+
     protected function writeAuditLog(AuditAction $action, ?array $before, ?array $after): void
     {
         $before = $this->filterAuditFields($before);

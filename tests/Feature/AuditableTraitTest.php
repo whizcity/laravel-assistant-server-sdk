@@ -96,25 +96,63 @@ final class AuditableTraitTest extends TestCase
         $this->assertCount(0, AuditLog::all());
     }
 
-    public function test_mass_query_builder_writes_do_not_audit_and_do_not_crash(): void
+    public function test_mass_query_builder_writes_are_audited_per_row(): void
     {
-        // query()->where(...)->update()/delete() 是批量 SQL 路径：模型事件
-        // 拿不到 dirty（updated 钩子的空 checks 直接跳过），不产生审计行；
-        // 本测试同时锁住 WeakMap 修复——动态属性曾在 updating 阶段炸列。
+        // query()->where(...)->update()/delete() 不依赖模型事件拿变化——
+        // 自定义 Builder 先抓 before 原像再执行原语句，随后逐行落审计；
+        // 实例 save 同走 Builder::update()，靠调用栈区分避免重复记账。
         $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
+        TestAuditSubject::create(['title' => 'b', 'status' => 'draft']);
+        $this->assertCount(2, AuditLog::all());
+
+        TestAuditSubject::query()->where('id', 1)->update(['status' => 'paid']);
+
+        $updates = AuditLog::query()->where('action', AuditAction::Update->value)->get();
+        $this->assertCount(1, $updates);
+        $this->assertSame('1', $updates[0]->resource_id);
+        $this->assertSame(['status' => 'draft'], $updates[0]->before);
+        $this->assertSame(['status' => 'paid'], $updates[0]->after);
+        $this->assertSame(3, AuditLog::count());
+
+        TestAuditSubject::query()->where('id', 2)->delete();
+
+        $deletes = AuditLog::query()->where('action', AuditAction::Delete->value)->get();
+        $this->assertCount(1, $deletes);
+        $this->assertSame('2', $deletes[0]->resource_id);
+        $this->assertSame(['title' => 'b', 'status' => 'draft'], $deletes[0]->before);
+        $this->assertNull($deletes[0]->after);
+        $this->assertSame(4, AuditLog::count());
+    }
+
+    public function test_mass_query_builder_writes_stay_silent_without_snapshot(): void
+    {
+        // 无快照：语句照常执行（行真的被改/删），但不产生任何审计行，
+        // 也不在批量路径上崩溃（WeakMap 回归守护）。
         TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
         TestAuditSubject::create(['title' => 'b', 'status' => 'draft']);
 
         TestAuditSubject::query()->where('id', 1)->update(['status' => 'paid']);
-        $this->assertCount(2, AuditLog::all());
+        $this->assertSame(['status' => 'paid'], TestAuditSubject::find(1)?->only('status'));
 
         TestAuditSubject::query()->where('id', 2)->delete();
-        $this->assertCount(2, AuditLog::all());
+        $this->assertNull(TestAuditSubject::find(2));
+
+        $this->assertCount(0, AuditLog::all());
+    }
+
+    public function test_instance_save_records_exactly_once(): void
+    {
+        // 实例 save 同样穿过自定义 Builder：调用栈守卫必须挡住双记账。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
 
         TestAuditSubject::find(1)?->update(['status' => 'refunded']);
-        $this->assertCount(3, AuditLog::all());
-        // row1 在批量 update 时已被改为 paid，实例 update 的 before 就是 paid
-        $this->assertSame(['status' => 'paid'], AuditLog::latest('id')->first()->before);
+
+        $updates = AuditLog::query()->where('action', AuditAction::Update->value)->get();
+        $this->assertCount(1, $updates);
+        $this->assertSame(['status' => 'draft'], $updates[0]->before);
+        $this->assertSame(['status' => 'refunded'], $updates[0]->after);
     }
 
     public function test_query_builder_writes_can_be_recorded_manually(): void
