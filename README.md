@@ -1,7 +1,3 @@
-# Whizcity Assistant-Server（Laravel SDK）
-
-私有 Composer 包：`assistant-server`（Python / FastAPI）的 Laravel 客户端 SDK。统一封装一次性 HMAC 签名鉴权与请求响应协议；audit 日志域（本地落盘 + 定时批量同步）与 OCR 域是当前已内置能力的示例，服务端新加接口不需要改 SDK。
-
 **要求：** PHP ^8.4 · Laravel ^12
 
 
@@ -24,7 +20,7 @@ php artisan vendor:publish --tag=audit-migrations
 php artisan migrate
 ```
 
-版本约定：本仓库打 git tag（如 `v0.1.0`）即为可锁定版本；开发版用 `dev-main` 引用。
+版本约定：本仓库打 git tag（如 `v0.1.0`）即为可锁定版本;
 
 ## 环境变量
 
