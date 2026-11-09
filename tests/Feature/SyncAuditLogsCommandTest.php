@@ -238,8 +238,8 @@ final class SyncAuditLogsCommandTest extends TestCase
 
         $this->assertCount(1, self::$sent);
         $body = json_decode((string) self::$sent[0]->getBody(), true);
-        $this->assertCount(1, $body);
-        $this->assertSame($cooled->resource_id, $body[0]['resource_id']);
+        $this->assertCount(1, $body['events']);
+        $this->assertSame($cooled->resource_id, $body['events'][0]['resource_id']);
 
         $this->assertSame(2, $cooled->refresh()->retry_count);
         $hot->refresh();
