@@ -15,7 +15,7 @@ class CleanSyncedAuditLogs extends Command
 
     public function handle(): int
     {
-        $days  = (int) ($this->option('days') ?: config('audit.retention_days', 30));
+        $days  = (int) ($this->option('days') ?: config('assistant_server.audit.retention_days', 30));
         $limit = (int) $this->option('limit');
         $threshold = now()->subDays($days);
 

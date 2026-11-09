@@ -16,7 +16,7 @@ trait Auditable
     protected array $auditOnly = [];
 
     /**
-     * Extra per-model blacklist (merged with config('audit.except')).
+     * Extra per-model blacklist (merged with config('assistant_server.audit.except')).
      *
      * @var array<int, string>
      */
@@ -66,11 +66,11 @@ trait Auditable
             return;
         }
 
-        $snapshot = (array) (request()?->get((string) config('audit.user_info_key', 'user')) ?: []); // middleware-injected actor snapshot
+        $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []); // middleware-injected actor snapshot
 
         AuditLog::create([
             'event_id'    => (string) Str::ulid(),
-            'service'     => config('audit.service'),
+            'service'     => config('assistant_server.audit.service'),
             'action'      => $action,
             'resource'    => $this->getTable(),
             'resource_id' => (string) $this->getKey(),
@@ -98,7 +98,7 @@ trait Auditable
         }
 
         $except = array_unique(array_merge(
-            config('audit.except', []),
+            config('assistant_server.audit.except', []),
             $this->auditExcept
         ));
 

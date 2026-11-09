@@ -46,7 +46,7 @@ final class AuditableTraitTest extends TestCase
     private function actor(array $snapshot): void
     {
         // 消费方中间件的注入方式：$request->attributes->add([<配置的键名> => $user])
-        request()->attributes->add([config('audit.user_info_key', 'user') => $snapshot]);
+        request()->attributes->add([config('assistant_server.audit.user_info_key', 'user') => $snapshot]);
     }
 
     public function test_created_rows_snapshot_the_operator_from_request_userinfo(): void
@@ -62,7 +62,7 @@ final class AuditableTraitTest extends TestCase
 
     public function test_operator_snapshot_request_key_is_configurable(): void
     {
-        config(['audit.user_info_key' => 'session_actor']);
+        config(['assistant_server.audit.user_info_key' => 'session_actor']);
         request()->attributes->add(['session_actor' => ['id' => '7', 'nickname' => '李四']]);
 
         TestAuditSubject::create(['title' => '订单二', 'status' => 'paid']);

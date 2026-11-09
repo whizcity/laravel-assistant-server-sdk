@@ -60,7 +60,6 @@ composer require whizcity/assistant-server
 
 ```bash
 php artisan vendor:publish --tag=assistant-server-config
-php artisan vendor:publish --tag=audit-config
 php artisan vendor:publish --tag=audit-migrations
 php artisan migrate
 ```

@@ -15,10 +15,6 @@ class AssistantServerServiceProvider extends ServiceProvider
         ], 'assistant-server-config');
 
         $this->publishes([
-            __DIR__ . '/../config/audit.php' => config_path('audit.php'),
-        ], 'audit-config');
-
-        $this->publishes([
             __DIR__ . '/../database/migrations/' => database_path('migrations'),
         ], 'audit-migrations');
 
@@ -36,6 +32,5 @@ class AssistantServerServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/assistant_server.php', 'assistant_server');
-        $this->mergeConfigFrom(__DIR__ . '/../config/audit.php', 'audit');
     }
 }

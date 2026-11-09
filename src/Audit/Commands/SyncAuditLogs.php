@@ -16,7 +16,7 @@ class SyncAuditLogs extends Command
     public function handle(AuditCollectorClient $client): int
     {
         $limit = (int) $this->option("limit");
-        $maxRetry = (int) config("audit.max_retry", 5);
+        $maxRetry = (int) config("assistant_server.audit.max_retry", 5);
 
         $logs = AuditLog::query()
             ->where("synced", 0)
