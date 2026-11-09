@@ -54,6 +54,28 @@ Schedule::command('audit:clean --days=30')
 | `php artisan audit:sync --limit=300` | 批量推送未同步日志 |
 | `php artisan audit:clean --days=30` | 删除已同步且超过保留期的本地日志 |
 
+## 手动补记
+
+模型 trait（`Auditable`）只覆盖 Eloquent 事件写入。`DB::table(...)` / 查询构造器不触发模型事件，这些写入点手动补一行：
+
+```php
+use Whizcity\AssistantServer\Audit\AuditAction;
+use Whizcity\AssistantServer\Audit\Models\AuditLog;
+
+$before = DB::table('orders')->where('id', 5)->first(['status']); // update 前先取一份
+DB::table('orders')->where('id', 5)->update(['status' => 'paid']);
+
+AuditLog::record(
+    AuditAction::Update,          // 枚举：Create / Update / Delete，传字符串会 TypeError
+    'orders',
+    '5',
+    ['status' => 'pending'],      // before
+    ['status' => 'paid'],         // after
+);
+```
+
+规则与 trait 一致：请求上没有认证中间件注入的 actor 快照（`assistant_server.audit.user_info_key` 所指键）时不落库；`before`/`after` 原样入库，敏感字段由调用方自行剔除。
+
 ## 命名空间
 
 `Whizcity\AssistantServer`
