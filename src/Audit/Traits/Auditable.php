@@ -2,6 +2,7 @@
 
 namespace Whizcity\AssistantServer\Audit\Traits;
 
+use Illuminate\Database\Eloquent\Builder;
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
 use Whizcity\AssistantServer\Audit\AuditableQueryBuilder;
 use Whizcity\AssistantServer\Audit\AuditAction;
@@ -87,6 +88,43 @@ trait Auditable
     public function auditFilterPayload(?array $data): ?array
     {
         return $this->filterAuditFields($data);
+    }
+
+    /**
+     * True while parent save internals run, set by the two overrides below.
+     * AuditableQueryBuilder reads this flag (instead of scanning the call
+     * stack) to leave save-path statements to the model-event hooks.
+     */
+    protected static bool $savePathActive = false;
+
+    public function savePathActive(): bool
+    {
+        return static::$savePathActive;
+    }
+
+    /**
+     * @return mixed passthrough of parent::performUpdate() (bool in Laravel 12)
+     */
+    #[\ReturnTypeWillChange]
+    protected function performUpdate(Builder $query)
+    {
+        static::$savePathActive = true;
+        try {
+            return parent::performUpdate($query);
+        } finally {
+            // finally: flag resets even when events throw mid-save.
+            static::$savePathActive = false;
+        }
+    }
+
+    protected function performDeleteOnModel(): void
+    {
+        static::$savePathActive = true;
+        try {
+            parent::performDeleteOnModel();
+        } finally {
+            static::$savePathActive = false;
+        }
     }
 
     protected function writeAuditLog(AuditAction $action, ?array $before, ?array $after): void

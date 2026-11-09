@@ -12,9 +12,9 @@ use Whizcity\AssistantServer\Audit\Models\AuditLog;
  * dirty state / delete never fires), so this builder snapshots before-images
  * first, runs the original statement, then records one audit row per row via
  * AuditLog::record(). Instance saves pass through the SAME Builder::update()
- * (performUpdate -> setKeysForSaveQuery(...)->update($dirty)), so the save
- * path is detected via the call stack and left to the model-event hooks to
- * avoid double recording.
+ * (performUpdate -> setKeysForSaveQuery(...)->update($dirty)); the Auditable
+ * trait flips a save-path flag around both internal calls, so they are left
+ * to the model-event hooks and never recorded twice here.
  */
 class AuditableQueryBuilder extends Builder
 {
@@ -78,16 +78,11 @@ class AuditableQueryBuilder extends Builder
 
     /**
      * True when the model save internals (performUpdate / performDeleteOnModel)
-     * are the caller — those paths are audited by the model-event hooks already.
+     * are the caller — the Auditable trait flips $savePathActive around both,
+     * and those paths are audited by the model-event hooks already.
      */
     private function fromSavePath(): bool
     {
-        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4) as $frame) {
-            if (in_array($frame['function'] ?? '', ['performUpdate', 'performDeleteOnModel'], true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->model->savePathActive();
     }
 }
