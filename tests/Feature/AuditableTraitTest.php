@@ -113,7 +113,8 @@ final class AuditableTraitTest extends TestCase
 
         TestAuditSubject::find(1)?->update(['status' => 'refunded']);
         $this->assertCount(3, AuditLog::all());
-        $this->assertSame(['status' => 'draft'], AuditLog::latest('id')->first()->before);
+        // row1 在批量 update 时已被改为 paid，实例 update 的 before 就是 paid
+        $this->assertSame(['status' => 'paid'], AuditLog::latest('id')->first()->before);
     }
 
     public function test_query_builder_writes_can_be_recorded_manually(): void
