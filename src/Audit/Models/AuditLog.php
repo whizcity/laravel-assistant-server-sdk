@@ -78,6 +78,7 @@ class AuditLog extends Model
                               ?? request()?->header('X-Request-Id'),
             'user_agent'  => request()?->userAgent(),
             'synced'      => 0,
+            'next_retry_at' => now(),
             'created_at'  => now(),
         ]);
     }

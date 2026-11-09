@@ -21,11 +21,7 @@ class SyncAuditLogs extends Command
         $logs = AuditLog::query()
             ->where("synced", 0)
             ->where("retry_count", "<", $maxRetry)
-            ->where(
-                fn($q) => $q
-                    ->whereNull("next_retry_at")
-                    ->orWhere("next_retry_at", "<=", now()),
-            )
+            ->where("next_retry_at", "<=", now())
             ->orderBy("id")
             ->limit($limit)
             ->get();

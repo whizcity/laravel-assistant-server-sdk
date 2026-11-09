@@ -181,6 +181,17 @@ final class AuditableTraitTest extends TestCase
         $this->assertSame(['status' => 'refunded'], $updates[0]->after);
     }
 
+    public function test_new_rows_are_immediately_eligible_for_sync(): void
+    {
+        // next_retry_at 写入即填 now（不再用 NULL 表示从未失败），同步查询无需 whereNull。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertInstanceOf(\Illuminate\Support\Carbon::class, $row->next_retry_at);
+        $this->assertTrue($row->next_retry_at->isPast() || $row->next_retry_at->eq(now()));
+    }
+
     public function test_query_builder_writes_can_be_recorded_manually(): void
     {
         // DB::table(...) 不触发 Eloquent 事件，钩子拿不到变化；旁路写入点手动补记。
