@@ -119,7 +119,7 @@ final class AuditableTraitTest extends TestCase
     {
         AuditLog::record(AuditAction::Update, 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // 无快照
         $this->actor(['id' => '9', 'nickname' => '张三']);
-        AuditLog::record('update', 'audit_subjects', '3', null, null); // 无变化数据
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', null, null); // 无变化数据
 
         $this->assertCount(0, AuditLog::all());
     }
