@@ -1,5 +1,5 @@
 {
-  "name": "whizcity/assistant-server",
+  "name": "whizcity/laravel-assistant-server",
   "description": "Laravel SDK client for the assistant-server (One-Time HMAC signature authentication, audit logging, OCR, and other modules)",
   "type": "library",
   "license": "proprietary",
