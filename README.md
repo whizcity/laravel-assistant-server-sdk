@@ -43,7 +43,7 @@ Model (use Auditable)
 "repositories": [
   {
     "type": "vcs",
-    "url": "git@github.com:whizcity/laravel-assistant-server-sdk.git"
+    "url": "https://github.com/whizcity/laravel-assistant-server-sdk.git"
   }
 ]
 ```
