@@ -3,6 +3,7 @@
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Orchestra\Testbench\TestCase;
+use Whizcity\AssistantServer\Audit\AuditAction;
 use Whizcity\AssistantServer\AssistantServerServiceProvider;
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
 use Whizcity\AssistantServer\Audit\Traits\Auditable;
@@ -102,7 +103,7 @@ final class AuditableTraitTest extends TestCase
         DB::table('audit_subjects')->insert(['id' => 3, 'title' => '旁路写入', 'status' => 'draft']);
         DB::table('audit_subjects')->where('id', 3)->update(['status' => 'paid']);
 
-        AuditLog::record('update', 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']);
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']);
 
         $row = AuditLog::query()->latest('id')->first();
         $this->assertNotNull($row);
@@ -116,11 +117,29 @@ final class AuditableTraitTest extends TestCase
 
     public function test_manual_recorders_skip_rows_without_snapshot_and_empty_payloads(): void
     {
-        AuditLog::record('update', 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // 无快照
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // 无快照
         $this->actor(['id' => '9', 'nickname' => '张三']);
         AuditLog::record('update', 'audit_subjects', '3', null, null); // 无变化数据
 
         $this->assertCount(0, AuditLog::all());
+    }
+
+    public function test_action_is_a_backed_enum_written_as_the_case_value(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        DB::table('audit_subjects')->insert(['id' => 4, 'title' => '旁路写入', 'status' => 'draft']);
+
+        AuditLog::record(AuditAction::Update, 'audit_subjects', '4', ['status' => 'draft'], ['status' => 'paid']);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('update', $row->action);
+    }
+
+    public function test_record_rejects_raw_strings_for_action(): void
+    {
+        $this->expectException(\TypeError::class);
+
+        AuditLog::record('update', 'audit_subjects', '4', null, null);
     }
 }
 

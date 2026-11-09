@@ -3,6 +3,7 @@
 namespace Whizcity\AssistantServer\Audit\Traits;
 
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
+use Whizcity\AssistantServer\Audit\AuditAction;
 
 trait Auditable
 {
@@ -24,7 +25,7 @@ trait Auditable
     public static function bootAuditable(): void
     {
         static::created(function ($model) {
-            $model->writeAuditLog('create', null, $model->getAttributes());
+            $model->writeAuditLog(AuditAction::Create, null, $model->getAttributes());
         });
 
         static::updating(function ($model) {
@@ -42,21 +43,21 @@ trait Auditable
             }
 
             $model->writeAuditLog(
-                'update',
+                AuditAction::Update,
                 array_intersect_key($before, $dirty),
                 array_intersect_key($after, $dirty)
             );
         });
 
         static::deleted(function ($model) {
-            $model->writeAuditLog('delete', $model->getOriginal(), null);
+            $model->writeAuditLog(AuditAction::Delete, $model->getOriginal(), null);
         });
     }
 
     /**
      * Persist one audit record to the local table. Never performs HTTP.
      */
-    protected function writeAuditLog(string $action, ?array $before, ?array $after): void
+    protected function writeAuditLog(AuditAction $action, ?array $before, ?array $after): void
     {
         $before = $this->filterAuditFields($before);
         $after  = $this->filterAuditFields($after);

@@ -4,6 +4,7 @@ namespace Whizcity\AssistantServer\Audit\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Whizcity\AssistantServer\Audit\AuditAction;
 
 class AuditLog extends Model
 {
@@ -50,7 +51,7 @@ class AuditLog extends Model
      * rows with an empty before+after payload. $before/$after payloads
      * are taken as-is; the caller is responsible for sensitive fields.
      */
-    public static function record(string $action, string $resource, $resourceId, ?array $before, ?array $after): void
+    public static function record(AuditAction $action, string $resource, $resourceId, ?array $before, ?array $after): void
     {
         // No actor snapshot = console/queue context, not an admin-panel operation: skip.
         $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []);
@@ -65,7 +66,7 @@ class AuditLog extends Model
         AuditLog::create([
             'event_id'    => (string) Str::ulid(),
             'service'     => config('assistant_server.audit.service'),
-            'action'      => $action,
+            'action'      => $action->value,
             'resource'    => $resource,
             'resource_id' => (string) $resourceId,
             'operator_id' => isset($snapshot['id']) ? (string) $snapshot['id'] : null,
