@@ -96,6 +96,26 @@ final class AuditableTraitTest extends TestCase
         $this->assertCount(0, AuditLog::all());
     }
 
+    public function test_mass_query_builder_writes_do_not_audit_and_do_not_crash(): void
+    {
+        // query()->where(...)->update()/delete() 是批量 SQL 路径：模型事件
+        // 拿不到 dirty（updated 钩子的空 checks 直接跳过），不产生审计行；
+        // 本测试同时锁住 WeakMap 修复——动态属性曾在 updating 阶段炸列。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => 'a', 'status' => 'draft']);
+        TestAuditSubject::create(['title' => 'b', 'status' => 'draft']);
+
+        TestAuditSubject::query()->where('id', 1)->update(['status' => 'paid']);
+        $this->assertCount(2, AuditLog::all());
+
+        TestAuditSubject::query()->where('id', 2)->delete();
+        $this->assertCount(2, AuditLog::all());
+
+        TestAuditSubject::find(1)?->update(['status' => 'refunded']);
+        $this->assertCount(3, AuditLog::all());
+        $this->assertSame(['status' => 'draft'], AuditLog::latest('id')->first()->before);
+    }
+
     public function test_query_builder_writes_can_be_recorded_manually(): void
     {
         // DB::table(...) 不触发 Eloquent 事件，钩子拿不到变化；旁路写入点手动补记。

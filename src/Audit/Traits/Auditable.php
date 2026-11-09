@@ -22,19 +22,28 @@ trait Auditable
      */
     protected array $auditExcept = [];
 
+    /**
+     * Before images stashed on updating. A WeakMap — NOT a dynamic model
+     * attribute — because Builder::update() treats dynamic attributes as
+     * column names and would break the mass UPDATE.
+     */
+    protected static \WeakMap $auditBeforeImages;
+
     public static function bootAuditable(): void
     {
+        static::$auditBeforeImages ??= new \WeakMap();
+
         static::created(function ($model) {
             $model->writeAuditLog(AuditAction::Create, null, $model->getAttributes());
         });
 
         static::updating(function ($model) {
-            // Stash original attributes so we can compute a proper before image.
-            $model->audit_before = $model->getOriginal();
+            static::$auditBeforeImages[$model] = $model->getOriginal();
         });
 
         static::updated(function ($model) {
-            $before = $model->audit_before ?? [];
+            $before = static::$auditBeforeImages[$model] ?? [];
+            unset(static::$auditBeforeImages[$model]);
             $after  = $model->getAttributes();
             $dirty  = $model->getChanges();
 

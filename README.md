@@ -83,7 +83,10 @@ class Order extends Model
 
 ## 手动补记
 
-模型 trait（`Auditable`）只覆盖 Eloquent 事件写入。`DB::table(...)` / 查询构造器不触发模型事件，这些写入点手动补一行：
+模型 trait（`Auditable`）只覆盖 Eloquent 事件写入。两类写入点不触发有效审计，需要手动补一行：
+
+- `DB::table(...)` / 查询构造器 —— 模型事件根本不触发；
+- `Model::query()->where(...)->update([...])` / `->delete()`（批量 SQL）——Laravel 会触发 `updating` 事件但拿不到 dirty，trait 的 updated 钩子跳过，不落审计行。
 
 ```php
 use Whizcity\AssistantServer\Audit\AuditAction;
