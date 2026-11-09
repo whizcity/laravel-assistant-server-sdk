@@ -127,6 +127,16 @@ trait Auditable
         }
     }
 
+    protected function performInsert(Builder $query)
+    {
+        static::$savePathActive = true;
+        try {
+            return parent::performInsert($query);
+        } finally {
+            static::$savePathActive = false;
+        }
+    }
+
     protected function writeAuditLog(AuditAction $action, ?array $before, ?array $after): void
     {
         $before = $this->filterAuditFields($before);

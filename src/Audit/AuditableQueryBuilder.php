@@ -77,6 +77,51 @@ class AuditableQueryBuilder extends Builder
     }
 
     /**
+     * Auto-audit query()-level inserts (single row or list of rows).
+     * resource_id is emptied: plain insert() yields no ids (use insertGetId
+     * when the id matters).
+     */
+    public function insert(array $values): bool
+    {
+        $shouldAudit = ! $this->fromSavePath() && $this->model->hasActorSnapshot();
+        $rows = [];
+        if ($shouldAudit) {
+            $rows = (isset($values[0]) && is_array($values[0])) ? $values : [$values];
+        }
+
+        $ok = parent::insert($values);
+
+        if ($ok && $shouldAudit) {
+            foreach ($rows as $row) {
+                $after = $this->model->auditFilterPayload($row) ?: [];
+                if ($after === []) {
+                    continue; // 敏感字段被清空，跳过
+                }
+                AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $after);
+            }
+        }
+
+        return $ok;
+    }
+
+    public function insertGetId(array $values, $sequence = null): int
+    {
+        $shouldAudit = ! $this->fromSavePath() && $this->model->hasActorSnapshot();
+        $row = $shouldAudit ? $values : [];
+
+        $id = parent::insertGetId($values, $sequence);
+
+        if ($id && $shouldAudit) {
+            $after = $this->model->auditFilterPayload($row) ?: [];
+            if ($after !== []) {
+                AuditLog::record(AuditAction::Create, $this->model->getTable(), (string) $id, null, $after);
+            }
+        }
+
+        return $id;
+    }
+
+    /**
      * True when the model save internals (performUpdate / performDeleteOnModel)
      * are the caller — the Auditable trait flips $savePathActive around both,
      * and those paths are audited by the model-event hooks already.

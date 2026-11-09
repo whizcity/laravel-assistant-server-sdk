@@ -81,7 +81,7 @@ class Order extends Model
 - **无快照不记录**：命令行 / 定时任务 / 队列等非管理员上下文不产生审计行。
 - 落库即结束，同步到中心由 `audit:sync` 完成。
 
-批量 SQL（`Model::query()->where(...)->update([...])` / `->delete()`）同样自动按行审计：trait 把模型的 `query()` 换成了内部的 `AuditableQueryBuilder`，批量语句执行前抓每行的 before 快照、执行后逐行落审计行（PK 不进 before/after 载荷、无实际变化与被敏感字段清空的行自动跳过）。`DB::table(...)` 查询构造器直写不经任何模型，仍需手动补记（见下节）。
+批量 SQL（`Model::query()->where(...)->update([...])` / `->delete()`，以及 `->insert([...])` / `->insertGetId([...])`）同样自动审计（trait 把模型的 `query()` 换成内部的 `AuditableQueryBuilder`）：update/delete 执行前抓每行 before 快照、执行后逐行落行；insert/insertGetId 每落一行审计一条 create（`before` 为 null，`insert()` 调不出自增 id 故 `resource_id` 为空要 id 就用 `insertGetId`）。PK 不进 before/after 载荷、无实际变化与被敏感字段清空的行自动跳过。`DB::table(...)` 查询构造器直写不经任何模型，仍需手动补记（见下节）。
 
 ## 手动补记
 

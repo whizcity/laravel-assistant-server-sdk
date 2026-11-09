@@ -141,6 +141,32 @@ final class AuditableTraitTest extends TestCase
         $this->assertCount(0, AuditLog::all());
     }
 
+    public function test_mass_insert_via_query_is_audited_unless_save_path(): void
+    {
+        // 实例 create() 内部同样走 Builder::insert：save-path 旗挡住钩子路径，
+        // 只有显式的 query()->insertGetId() 才额外落一行。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => '青山', 'status' => 'draft']);
+
+        $newId = TestAuditSubject::query()->insertGetId(['title' => '外围', 'status' => 'paid']);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('create', $row->action);
+        $this->assertSame('audit_subjects', $row->resource);
+        $this->assertSame((string) $newId, $row->resource_id);
+        $this->assertNull($row->before);
+        $this->assertSame(['title' => '外围', 'status' => 'paid'], $row->after);
+
+        $this->assertCount(2, AuditLog::all()); // 1 钩子(create()) + 1 批量 insertGetId
+    }
+
+    public function test_mass_insert_records_and_stays_silent_without_snapshot(): void
+    {
+        TestAuditSubject::query()->insert(['title' => '旁路', 'status' => 'paid']);
+        $this->assertTrue(TestAuditSubject::query()->where('title', '旁路')->exists());
+        $this->assertCount(0, AuditLog::all());
+    }
+
     public function test_instance_save_records_exactly_once(): void
     {
         // 实例 save 同样穿过自定义 Builder：调用栈守卫必须挡住双记账。
