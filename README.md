@@ -79,14 +79,13 @@ class Order extends Model
 - **create**：记全字段快照（after）；**update**：只记 dirty 字段的 before→after；**delete**：记原值（before）。敏感字段由 `audit.except` + `$auditExcept` 双层过滤。
 - **operator_id / operator_name**：取请求上认证中间件注入的 actor 快照（数组，含 `id` / `nickname`），键名就是上面 env 里的 `AUDIT_USER_INFO_KEY`。
 - **无快照不记录**：命令行 / 定时任务 / 队列等非管理员上下文不产生审计行。
-- 落库即结束，同步到中心由 `audit:sync` 完成；`DB::table(...)` 直写的的场景见下节「手动补记」。
+- 落库即结束，同步到中心由 `audit:sync` 完成。
+
+批量 SQL（`Model::query()->where(...)->update([...])` / `->delete()`）同样自动按行审计：trait 把模型的 `query()` 换成了内部的 `AuditableQueryBuilder`，批量语句执行前抓每行的 before 快照、执行后逐行落审计行（PK 不进 before/after 载荷、无实际变化与被敏感字段清空的行自动跳过）。`DB::table(...)` 查询构造器直写不经任何模型，仍需手动补记（见下节）。
 
 ## 手动补记
 
-模型 trait（`Auditable`）只覆盖 Eloquent 事件写入。两类写入点不触发有效审计，需要手动补一行：
-
-- `DB::table(...)` / 查询构造器 —— 模型事件根本不触发；
-- `Model::query()->where(...)->update([...])` / `->delete()`（批量 SQL）——Laravel 会触发 `updating` 事件但拿不到 dirty，trait 的 updated 钩子跳过，不落审计行。
+模型 trait（`Auditable`）覆盖 Eloquent 事件写入与批量 SQL（内部 `AuditableQueryBuilder`，见上节）。唯一不自动的缺口是 `DB::table(...)` / 查询构造器直写——不经任何模型，事件与钩子都无从触发，需要手动补一行：
 
 ```php
 use Whizcity\AssistantServer\Audit\AuditAction;
