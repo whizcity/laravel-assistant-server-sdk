@@ -98,6 +98,9 @@ final class SyncAuditLogsCommandTest extends TestCase
         $this->assertSame('demo-app', $request->getHeaderLine('X-App-Id'));
 
         $body = json_decode((string) $request->getBody(), true);
+        // 服务端 AuditBatch 是信封 {"events":[...]}（1~500 条、批内 event_id 去重）。
+        $this->assertIsArray($body['events'] ?? null);
+        $this->assertCount(2, $body['events']);
         $this->assertSame([
             'event_id' => '01HV4ZJ3KF7XY98ZXNQFS11JJ9',
             'service' => 'order-service',
@@ -112,8 +115,8 @@ final class SyncAuditLogsCommandTest extends TestCase
             'trace_id' => 'abc-123',
             'user_agent' => 'UA/1.0',
             'created_at' => '2024-05-06T10:00:00.000000Z',
-        ], $body[0]);
-        $this->assertSame('456', $body[1]['resource_id']);
+        ], $body['events'][0]);
+        $this->assertSame('456', $body['events'][1]['resource_id']);
 
         $this->assertSame(1, $a->refresh()->synced);
         $this->assertSame(1, $b->refresh()->synced);

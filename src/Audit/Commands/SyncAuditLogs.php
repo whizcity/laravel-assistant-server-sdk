@@ -52,7 +52,8 @@ class SyncAuditLogs extends Command
             ->values()
             ->all();
 
-        $result = $client->syncBatch($payload);
+        // 服务端 AuditBatch 期望信封 {"events": [...]}，1~500 条、批内 event_id 去重。
+        $result = $client->syncBatch(["events" => $payload]);
 
         if ($result->isSuccess()) {
             AuditLog::whereIn("id", $logs->pluck("id"))->update([
