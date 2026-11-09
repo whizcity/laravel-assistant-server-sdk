@@ -9,7 +9,8 @@ use Whizcity\AssistantServer\Audit\Traits\Auditable;
 /**
  * Trait 行为：事件落库即快照。operator_id / operator_name 取自请求上
  * 中间件注入的 actor 快照（数组，含 id / nickname），键名由
- * audit.user_info_key 配置（默认 user）；无快照时两侧为 null。
+ * assistant_server.audit.user_info_key 配置（默认 user）；无快照时
+ * 视作非后台管理员操作（CLI/队列上下文），事件不落库。
  */
 final class AuditableTraitTest extends TestCase
 {
@@ -74,6 +75,7 @@ final class AuditableTraitTest extends TestCase
 
     public function test_created_rows_carry_a_unique_ulid_event_id(): void
     {
+        $this->actor(['id' => 9, 'nickname' => '张三']);
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
         TestAuditSubject::create(['title' => '订单二', 'status' => 'paid']);
 
@@ -84,13 +86,12 @@ final class AuditableTraitTest extends TestCase
         $this->assertNotSame($rows[0]->event_id, $rows[1]->event_id);
     }
 
-    public function test_guest_actions_leave_operator_fields_null(): void
+    public function test_operations_without_actor_snapshot_are_not_audited(): void
     {
+        // 无快照 = 非后台管理员操作（CLI/队列/无请求上下文），事件不落库。
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
 
-        $row = AuditLog::query()->latest('id')->first();
-        $this->assertNull($row->operator_id);
-        $this->assertNull($row->operator_name);
+        $this->assertCount(0, AuditLog::all());
     }
 }
 

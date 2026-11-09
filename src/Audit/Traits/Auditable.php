@@ -59,14 +59,18 @@ trait Auditable
      */
     protected function writeAuditLog(string $action, ?array $before, ?array $after): void
     {
+        // No actor snapshot = console/queue context, not an admin-panel operation: skip.
+        $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []);
+        if (empty($snapshot)) {
+            return;
+        }
+
         $before = $this->filterAuditFields($before);
         $after  = $this->filterAuditFields($after);
 
         if (empty($before) && empty($after)) {
             return;
         }
-
-        $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []); // middleware-injected actor snapshot
 
         AuditLog::create([
             'event_id'    => (string) Str::ulid(),

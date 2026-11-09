@@ -54,8 +54,6 @@ Schedule::command('audit:clean --days=30')
 | `php artisan audit:sync --limit=300` | 批量推送未同步日志 |
 | `php artisan audit:clean --days=30` | 删除已同步且超过保留期的本地日志 |
 
-```
-
 ## 命名空间
 
 `Whizcity\AssistantServer`
