@@ -101,7 +101,7 @@ class Order extends Model
 }
 ```
 
-`operator_id` / `operator_name` 取自请求上认证中间件注入的 `userInfo`（数组，含 `id`、`nickname`），即中间件里的 `$request->attributes->add(['userInfo' => $user])`；guest 请求两侧为 `null`。
+`operator_id` / `operator_name` 取自请求上认证中间件注入的 actor 快照（数组，含 `id`、`nickname`）。快照键名可配置，SDK 默认用中性键 `user`，不硬编码任何内部实现——部署方在 env 里把 `AUDIT_USER_INFO_KEY` 指到自己中间件真实注册的键名即可；guest 请求两侧为 `null`。
 
 定时任务（Laravel 12，`routes/console.php`）：
 

@@ -8,7 +8,8 @@ use Whizcity\AssistantServer\Audit\Traits\Auditable;
 
 /**
  * Trait 行为：事件落库即快照。operator_id / operator_name 取自请求上
- * 中间件注入的 userInfo（数组，含 id / nickname）；无 userInfo 时两侧为 null。
+ * 中间件注入的 actor 快照（数组，含 id / nickname），键名由
+ * audit.user_info_key 配置（默认 user）；无快照时两侧为 null。
  */
 final class AuditableTraitTest extends TestCase
 {
@@ -42,10 +43,10 @@ final class AuditableTraitTest extends TestCase
         });
     }
 
-    private function actor(array $userInfo): void
+    private function actor(array $snapshot): void
     {
-        // 消费方中间件的注入方式：$request->attributes->add(['userInfo' => $user])
-        request()->attributes->add(['userInfo' => $userInfo]);
+        // 消费方中间件的注入方式：$request->attributes->add([<配置的键名> => $user])
+        request()->attributes->add([config('audit.user_info_key', 'user') => $snapshot]);
     }
 
     public function test_created_rows_snapshot_the_operator_from_request_userinfo(): void
@@ -57,6 +58,18 @@ final class AuditableTraitTest extends TestCase
         $row = AuditLog::query()->latest('id')->first();
         $this->assertSame('9', $row->operator_id);
         $this->assertSame('张三', $row->operator_name);
+    }
+
+    public function test_operator_snapshot_request_key_is_configurable(): void
+    {
+        config(['audit.user_info_key' => 'session_actor']);
+        request()->attributes->add(['session_actor' => ['id' => '7', 'nickname' => '李四']]);
+
+        TestAuditSubject::create(['title' => '订单二', 'status' => 'paid']);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('7', $row->operator_id);
+        $this->assertSame('李四', $row->operator_name);
     }
 
     public function test_created_rows_carry_a_unique_ulid_event_id(): void

@@ -66,7 +66,7 @@ trait Auditable
             return;
         }
 
-        $userInfo = (array) (request()?->get('userInfo') ?: []); // middleware-injected actor snapshot
+        $snapshot = (array) (request()?->get((string) config('audit.user_info_key', 'user')) ?: []); // middleware-injected actor snapshot
 
         AuditLog::create([
             'event_id'    => (string) Str::ulid(),
@@ -74,8 +74,8 @@ trait Auditable
             'action'      => $action,
             'resource'    => $this->getTable(),
             'resource_id' => (string) $this->getKey(),
-            'operator_id' => isset($userInfo['id']) ? (string) $userInfo['id'] : null,
-            'operator_name' => $userInfo['nickname'] ?? null,
+            'operator_id' => isset($snapshot['id']) ? (string) $snapshot['id'] : null,
+            'operator_name' => $snapshot['nickname'] ?? null,
             'operator_ip' => request()?->ip(),
             'before'      => $before,
             'after'       => $after,

@@ -42,4 +42,17 @@ return [
     |--------------------------------------------------------------------------
     */
     'retention_days' => env('AUDIT_RETENTION_DAYS', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Operator Snapshot Request Key
+    |--------------------------------------------------------------------------
+    |
+    | Name of the request attribute that your auth middleware fills with the
+    | actor snapshot ("id", "nickname"). Ships with a neutral default so the
+    | SDK never hardcodes an internal key; consuming apps point
+    | AUDIT_USER_INFO_KEY at the real attribute name set by their middleware.
+    |
+    */
+    'user_info_key' => env('AUDIT_USER_INFO_KEY', 'user'),
 ];
