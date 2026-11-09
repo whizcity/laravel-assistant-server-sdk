@@ -1,15 +1,14 @@
 <?php
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Auth\User;
 use Orchestra\Testbench\TestCase;
 use Whizcity\AssistantServer\AssistantServerServiceProvider;
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
 use Whizcity\AssistantServer\Audit\Traits\Auditable;
 
 /**
- * Trait 行为：事件落库即快照。operator_name 取自认证用户的显示名列，
- * 模型可用 $auditOperatorNameColumn 改列；无登录用户两侧字段均为 null。
+ * Trait 行为：事件落库即快照。operator_id / operator_name 取自请求上
+ * 中间件注入的 userInfo（数组，含 id / nickname）；无 userInfo 时两侧为 null。
  */
 final class AuditableTraitTest extends TestCase
 {
@@ -43,33 +42,21 @@ final class AuditableTraitTest extends TestCase
         });
     }
 
-    private function actor(array $attributes): User
+    private function actor(array $userInfo): void
     {
-        $actor = new TestActor($attributes);
-        $this->actingAs($actor);
-
-        return $actor;
+        // 消费方中间件的注入方式：$request->attributes->add(['userInfo' => $user])
+        request()->attributes->add(['userInfo' => $userInfo]);
     }
 
-    public function test_created_rows_snapshot_the_operator_display_name(): void
+    public function test_created_rows_snapshot_the_operator_from_request_userinfo(): void
     {
-        $this->actor(['id' => 9, 'name' => '张三', 'nickname' => '昵称张']);
+        $this->actor(['id' => 9, 'nickname' => '张三']);
 
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
 
         $row = AuditLog::query()->latest('id')->first();
         $this->assertSame('9', $row->operator_id);
         $this->assertSame('张三', $row->operator_name);
-    }
-
-    public function test_models_can_pick_a_different_display_name_column(): void
-    {
-        $this->actor(['id' => 9, 'name' => '张三', 'nickname' => '昵称张']);
-
-        TestAuditSubjectNickname::create(['title' => '订单一', 'status' => 'paid']);
-
-        $row = AuditLog::query()->latest('id')->first();
-        $this->assertSame('昵称张', $row->operator_name);
     }
 
     public function test_created_rows_carry_a_unique_ulid_event_id(): void
@@ -94,28 +81,9 @@ final class AuditableTraitTest extends TestCase
     }
 }
 
-final class TestActor extends User
-{
-    protected $guarded = [];
-    public $timestamps = false;
-}
-
 final class TestAuditSubject extends Model
 {
     use Auditable;
-
-    protected $table = 'audit_subjects';
-    protected $guarded = [];
-    public $timestamps = false;
-}
-
-final class TestAuditSubjectNickname extends Model
-{
-    use Auditable;
-    public function auditOperatorNameColumn(): string
-    {
-        return 'nickname';
-    }
 
     protected $table = 'audit_subjects';
     protected $guarded = [];

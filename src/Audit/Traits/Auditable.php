@@ -3,7 +3,6 @@
 namespace Whizcity\AssistantServer\Audit\Traits;
 
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 trait Auditable
@@ -22,15 +21,6 @@ trait Auditable
      * @var array<int, string>
      */
     protected array $auditExcept = [];
-
-    /**
-     * Column on the authenticated user taken as the operator display name
-     * snapshot. Override in models whose actor table differs (e.g. "nickname").
-     */
-    public function auditOperatorNameColumn(): string
-    {
-        return 'name';
-    }
 
     public static function bootAuditable(): void
     {
@@ -76,14 +66,16 @@ trait Auditable
             return;
         }
 
+        $userInfo = (array) (request()?->get('userInfo') ?: []); // middleware-injected actor snapshot
+
         AuditLog::create([
             'event_id'    => (string) Str::ulid(),
             'service'     => config('audit.service'),
             'action'      => $action,
             'resource'    => $this->getTable(),
             'resource_id' => (string) $this->getKey(),
-            'operator_id' => Auth::id() ? (string) Auth::id() : null,
-            'operator_name' => Auth::user()?->{$this->auditOperatorNameColumn()},
+            'operator_id' => isset($userInfo['id']) ? (string) $userInfo['id'] : null,
+            'operator_name' => $userInfo['nickname'] ?? null,
             'operator_ip' => request()?->ip(),
             'before'      => $before,
             'after'       => $after,

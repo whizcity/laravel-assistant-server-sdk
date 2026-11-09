@@ -101,6 +101,8 @@ class Order extends Model
 }
 ```
 
+`operator_id` / `operator_name` 取自请求上认证中间件注入的 `userInfo`（数组，含 `id`、`nickname`），即中间件里的 `$request->attributes->add(['userInfo' => $user])`；guest 请求两侧为 `null`。
+
 定时任务（Laravel 12，`routes/console.php`）：
 
 ```php
