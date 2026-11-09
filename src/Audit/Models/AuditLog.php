@@ -3,6 +3,7 @@
 namespace Whizcity\AssistantServer\Audit\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class AuditLog extends Model
 {
@@ -39,4 +40,44 @@ class AuditLog extends Model
         'next_retry_at' => 'datetime',
         'created_at'    => 'datetime',
     ];
+
+    /**
+     * Shared writer for model hooks AND manual call sites that bypass
+     * Eloquent events (DB::table(...) / query builder) — Eloquent hooks
+     * never fire for those, so nothing is captured automatically.
+     *
+     * Skips rows without an operator snapshot (non-admin context) and
+     * rows with an empty before+after payload. $before/$after payloads
+     * are taken as-is; the caller is responsible for sensitive fields.
+     */
+    public static function record(string $action, string $resource, $resourceId, ?array $before, ?array $after): void
+    {
+        // No actor snapshot = console/queue context, not an admin-panel operation: skip.
+        $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []);
+        if (empty($snapshot)) {
+            return;
+        }
+
+        if (empty($before) && empty($after)) {
+            return;
+        }
+
+        AuditLog::create([
+            'event_id'    => (string) Str::ulid(),
+            'service'     => config('assistant_server.audit.service'),
+            'action'      => $action,
+            'resource'    => $resource,
+            'resource_id' => (string) $resourceId,
+            'operator_id' => isset($snapshot['id']) ? (string) $snapshot['id'] : null,
+            'operator_name' => $snapshot['nickname'] ?? null,
+            'operator_ip' => request()?->ip(),
+            'before'      => $before,
+            'after'       => $after,
+            'trace_id'    => request()?->header('X-Trace-Id')
+                              ?? request()?->header('X-Request-Id'),
+            'user_agent'  => request()?->userAgent(),
+            'synced'      => 0,
+            'created_at'  => now(),
+        ]);
+    }
 }

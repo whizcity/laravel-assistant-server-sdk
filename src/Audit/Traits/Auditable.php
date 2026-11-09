@@ -3,7 +3,6 @@
 namespace Whizcity\AssistantServer\Audit\Traits;
 
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
-use Illuminate\Support\Str;
 
 trait Auditable
 {
@@ -59,36 +58,10 @@ trait Auditable
      */
     protected function writeAuditLog(string $action, ?array $before, ?array $after): void
     {
-        // No actor snapshot = console/queue context, not an admin-panel operation: skip.
-        $snapshot = (array) (request()?->get((string) config('assistant_server.audit.user_info_key', 'user')) ?: []);
-        if (empty($snapshot)) {
-            return;
-        }
-
         $before = $this->filterAuditFields($before);
         $after  = $this->filterAuditFields($after);
 
-        if (empty($before) && empty($after)) {
-            return;
-        }
-
-        AuditLog::create([
-            'event_id'    => (string) Str::ulid(),
-            'service'     => config('assistant_server.audit.service'),
-            'action'      => $action,
-            'resource'    => $this->getTable(),
-            'resource_id' => (string) $this->getKey(),
-            'operator_id' => isset($snapshot['id']) ? (string) $snapshot['id'] : null,
-            'operator_name' => $snapshot['nickname'] ?? null,
-            'operator_ip' => request()?->ip(),
-            'before'      => $before,
-            'after'       => $after,
-            'trace_id'    => request()?->header('X-Trace-Id')
-                              ?? request()?->header('X-Request-Id'),
-            'user_agent'  => request()?->userAgent(),
-            'synced'      => 0,
-            'created_at'  => now(),
-        ]);
+        AuditLog::record($action, $this->getTable(), $this->getKey(), $before, $after);
     }
 
     protected function filterAuditFields(?array $data): ?array

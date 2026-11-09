@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Orchestra\Testbench\TestCase;
 use Whizcity\AssistantServer\AssistantServerServiceProvider;
 use Whizcity\AssistantServer\Audit\Models\AuditLog;
@@ -90,6 +91,34 @@ final class AuditableTraitTest extends TestCase
     {
         // 无快照 = 非后台管理员操作（CLI/队列/无请求上下文），事件不落库。
         TestAuditSubject::create(['title' => '订单一', 'status' => 'paid']);
+
+        $this->assertCount(0, AuditLog::all());
+    }
+
+    public function test_query_builder_writes_can_be_recorded_manually(): void
+    {
+        // DB::table(...) 不触发 Eloquent 事件，钩子拿不到变化；旁路写入点手动补记。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        DB::table('audit_subjects')->insert(['id' => 3, 'title' => '旁路写入', 'status' => 'draft']);
+        DB::table('audit_subjects')->where('id', 3)->update(['status' => 'paid']);
+
+        AuditLog::record('update', 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertNotNull($row);
+        $this->assertSame('update', $row->action);
+        $this->assertSame('audit_subjects', $row->resource);
+        $this->assertSame('3', $row->resource_id);
+        $this->assertSame('9', $row->operator_id);
+        $this->assertSame(['status' => 'draft'], $row->before);
+        $this->assertSame(['status' => 'paid'], $row->after);
+    }
+
+    public function test_manual_recorders_skip_rows_without_snapshot_and_empty_payloads(): void
+    {
+        AuditLog::record('update', 'audit_subjects', '3', ['status' => 'draft'], ['status' => 'paid']); // 无快照
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        AuditLog::record('update', 'audit_subjects', '3', null, null); // 无变化数据
 
         $this->assertCount(0, AuditLog::all());
     }
