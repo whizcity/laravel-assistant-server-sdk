@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('operator_id', 64)->nullable()->index();
             $table->string('operator_name', 64)->nullable();
             $table->string('operator_ip', 45)->nullable();
-            $table->json('before')->nullable();
-            $table->json('after')->nullable();
+            $table->text('before')->nullable();
+            $table->text('after')->nullable();
             $table->string('trace_id', 64)->nullable()->index();
             $table->string('user_agent')->nullable();
             $table->tinyInteger('synced')->default(0)->index();
