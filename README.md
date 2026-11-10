@@ -41,7 +41,7 @@ AUDIT_USER_INFO_KEY=
 定时任务（Laravel 12，`routes/console.php`）：
 
 ```php
-Schedule::command('audit:sync --limit=300')
+Schedule::command('audit:sync --limit=200')
     ->everyMinute()
     ->withoutOverlapping();
 
@@ -52,7 +52,7 @@ Schedule::command('audit:clean --days=30')
 
 | 命令 | 说明 |
 |------|------|
-| `php artisan audit:sync --limit=300` | 批量推送未同步日志 |
+| `php artisan audit:sync --limit=200` | 批量推送未同步日志 |
 | `php artisan audit:clean --days=30` | 删除已同步且超过保留期的本地日志 |
 
 ## Trait 审计

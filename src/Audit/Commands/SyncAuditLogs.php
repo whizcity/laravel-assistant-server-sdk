@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class SyncAuditLogs extends Command
 {
-    protected $signature = "audit:sync {--limit=300 : Number of rows to sync per run}";
+    protected $signature = "audit:sync {--limit=200 : Number of rows to sync per run}";
 
     protected $description = "Batch push unsynced local audit logs to the central collector";
 
