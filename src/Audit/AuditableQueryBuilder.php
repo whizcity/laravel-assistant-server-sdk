@@ -78,8 +78,12 @@ class AuditableQueryBuilder extends Builder
 
     /**
      * Auto-audit query()-level inserts (single row or list of rows).
-     * resource_id is emptied: plain insert() yields no ids (use insertGetId
-     * when the id matters).
+     * Multi-row inserts record ONE audit row per statement with the filtered
+     * rows in after = {"count": N, "rows": [...]}; keeps the audit table one
+     * row per write statement. Oversized payloads (>16KB JSON, the collector
+     * limit) collapse to {"count": N, "truncated": true}.
+     * Single-row and insertGetId keep the existing per-row recording with
+     * resource_id = the returned id when available.
      */
     public function insert(array $values): bool
     {
@@ -92,13 +96,24 @@ class AuditableQueryBuilder extends Builder
         $ok = parent::insert($values);
 
         if ($ok && $shouldAudit) {
-            foreach ($rows as $row) {
-                $after = $this->model->auditFilterPayload($row) ?: [];
-                if ($after === []) {
-                    continue; // payload emptied by sensitive-field filtering: skip
-                }
-                AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $after);
+            $rows = array_values(array_filter(array_map(
+                fn ($row) => $this->model->auditFilterPayload($row) ?: null,
+                $rows
+            )));
+            if ($rows === []) {
+                return $ok; // payload emptied by sensitive-field filtering: skip
             }
+
+            if (count($rows) === 1) {
+                AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $rows[0]);
+                return $ok;
+            }
+
+            $after = ['count' => count($rows), 'rows' => $rows];
+            if (strlen(json_encode($after, JSON_UNESCAPED_UNICODE)) > 16384) {
+                $after = ['count' => count($rows), 'truncated' => true]; // collector validates before/after <= 16KB JSON
+            }
+            AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $after);
         }
 
         return $ok;

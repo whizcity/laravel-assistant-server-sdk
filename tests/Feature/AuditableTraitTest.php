@@ -171,6 +171,54 @@ final class AuditableTraitTest extends TestCase
         $this->assertCount(0, AuditLog::all());
     }
 
+    public function test_multi_row_insert_is_recorded_as_one_statement_row(): void
+    {
+        // N-row batch insert = ONE audit row ({"count": N, "rows": [...]})。
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        TestAuditSubject::query()->insert([
+            ['title' => '批量一', 'status' => 'paid'],
+            ['title' => '批量二', 'status' => 'draft'],
+        ]);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('create', $row->action);
+        $this->assertSame('audit_subjects', $row->resource);
+        $this->assertSame('', $row->resource_id);
+        $this->assertNull($row->before);
+        $this->assertSame(['count' => 2, 'rows' => [
+            ['title' => '批量一', 'status' => 'paid'],
+            ['title' => '批量二', 'status' => 'draft'],
+        ]], $row->after);
+        $this->assertCount(1, AuditLog::all()); // one statement, one audit row
+    }
+
+    public function test_oversized_multi_row_insert_collapses_to_count_only(): void
+    {
+        // after must stay within the collector's 16KB JSON limit: collapse.
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        $rows = [];
+        for ($i = 0; $i < 400; $i++) {
+            $rows[] = ['title' => str_repeat('x', 50) . $i, 'status' => 'paid'];
+        }
+        TestAuditSubject::query()->insert($rows);
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame(['count' => 400, 'truncated' => true], $row->after);
+        $this->assertCount(1, AuditLog::all());
+    }
+
+    public function test_single_row_insert_keeps_per_row_recording(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        TestAuditSubject::query()->insert(['title' => '单独', 'status' => 'paid']);
+
+        $this->assertCount(1, AuditLog::all());
+        $this->assertSame(['title' => '单独', 'status' => 'paid'], AuditLog::query()->latest('id')->first()->after);
+    }
+
     public function test_instance_save_records_exactly_once(): void
     {
         // Instance saves pass through the custom Builder just the same: the
