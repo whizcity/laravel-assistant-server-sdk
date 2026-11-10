@@ -193,9 +193,11 @@ final class AuditableTraitTest extends TestCase
         $this->assertCount(1, AuditLog::all()); // one statement, one audit row
     }
 
-    public function test_oversized_multi_row_insert_collapses_to_count_only(): void
+    public function test_oversized_multi_row_insert_is_chunked_into_multiple_events(): void
     {
-        // after must stay within the collector's 16KB JSON limit: collapse.
+        // After must stay within the collector's 16KB JSON limit per event:
+        // a batch too big for one event is split into several chunk events,
+        // every key of the payloads preserved (no "truncated" lossy flag).
         $this->actor(['id' => '9', 'nickname' => '张三']);
 
         $rows = [];
@@ -204,9 +206,58 @@ final class AuditableTraitTest extends TestCase
         }
         TestAuditSubject::query()->insert($rows);
 
-        $row = AuditLog::query()->latest('id')->first();
-        $this->assertSame(['count' => 400, 'truncated' => true], $row->after);
+        $records = AuditLog::all();
+        $this->assertGreaterThan(1, $records->count());
+
+        $countSum = 0;
+        $seenRows = [];
+        foreach ($records as $record) {
+            $this->assertLessThanOrEqual(16384, strlen(json_encode($record->after, JSON_UNESCAPED_UNICODE)));
+            $this->assertSame('create', $record->action);
+            $this->assertArrayHasKey('count', $record->after);
+            $this->assertArrayHasKey('rows', $record->after);
+            $countSum += $record->after['count'];
+            $seenRows = array_merge($seenRows, $record->after['rows']);
+        }
+        $this->assertSame(400, $countSum);
+        $this->assertSame($rows, $seenRows); // every original row surfaces in some chunk
+    }
+
+    public function test_manual_record_with_oversized_payload_is_split_by_keys(): void
+    {
+        // A single event whose after side exceeds 16KB is split into several
+        // events by top-level keys; per-event payloads each fit the budget.
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        $payload = [];
+        foreach (['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as $key) {
+            $payload[$key] = str_repeat('好', 900); // ~2700B value each -> ~27KB total
+        }
+        AuditLog::record(AuditAction::Update, 'manual', '1', null, $payload);
+
+        $records = AuditLog::query()->orderBy('id')->get();
+        $this->assertGreaterThan(1, $records->count());
+
+        $seenKeys = [];
+        foreach ($records as $record) {
+            $this->assertSame('update', $record->action);
+            $this->assertLessThanOrEqual(16384, strlen(json_encode($record->after, JSON_UNESCAPED_UNICODE)));
+            $seenKeys = array_merge($seenKeys, array_keys($record->after));
+        }
+        $this->assertSame(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'], $seenKeys);
+    }
+
+    public function test_single_atomic_value_over_the_budget_stays_in_one_record(): void
+    {
+        // One key whose value alone exceeds the budget cannot be split any
+        // further: it stays whole in one record (server-side may reject it
+        // at sync time — that is the pre-existing behavior, kept visible).
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        AuditLog::record(AuditAction::Update, 'manual', '1', null, ['blob' => str_repeat('长', 10000)]);
+
         $this->assertCount(1, AuditLog::all());
+        $this->assertSame(['blob' => str_repeat('长', 10000)], AuditLog::query()->latest('id')->first()->after);
     }
 
     public function test_single_row_insert_keeps_per_row_recording(): void

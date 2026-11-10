@@ -13,8 +13,9 @@ use Whizcity\AssistantServer\Audit\Models\AuditLog;
  * first, runs the original statement, then records one audit row per row via
  * AuditLog::record(). Instance saves pass through the SAME Builder::update()
  * (performUpdate -> setKeysForSaveQuery(...)->update($dirty)); the Auditable
- * trait flips a save-path flag around both internal calls, so they are left
- * to the model-event hooks and never recorded twice here.
+ * trait flips a save-path flag around the three internal calls (performUpdate
+ * / performDeleteOnModel / performInsert), so those paths are left to the
+ * model-event hooks and never recorded twice here.
  */
 class AuditableQueryBuilder extends Builder
 {
@@ -79,11 +80,11 @@ class AuditableQueryBuilder extends Builder
     /**
      * Auto-audit query()-level inserts (single row or list of rows).
      * Multi-row inserts record ONE audit row per statement with the filtered
-     * rows in after = {"count": N, "rows": [...]}; keeps the audit table one
-     * row per write statement. Oversized payloads (>16KB JSON, the collector
-     * limit) collapse to {"count": N, "truncated": true}.
-     * Single-row and insertGetId keep the existing per-row recording with
-     * resource_id = the returned id when available.
+     * rows in after = {"count": N, "rows": [...]}. A batch whose payload
+     * would exceed the 16KB collector budget is split into several chunk
+     * events, each within budget — no lossy truncation. Single-row and
+     * insertGetId keep the existing per-row recording with resource_id =
+     * the returned id when available.
      */
     public function insert(array $values): bool
     {
@@ -109,11 +110,32 @@ class AuditableQueryBuilder extends Builder
                 return $ok;
             }
 
-            $after = ['count' => count($rows), 'rows' => $rows];
-            if (strlen(json_encode($after, JSON_UNESCAPED_UNICODE)) > 16384) {
-                $after = ['count' => count($rows), 'truncated' => true]; // collector validates before/after <= 16KB JSON
+            $chunks = []; // rows grouped so one event's after stays under the 16KB budget
+            $current = [];
+            $currentSize = 0;
+            foreach ($rows as $row) {
+                $rowSize = strlen(json_encode($row, JSON_UNESCAPED_UNICODE)) + 16;
+                if ($current !== [] && $currentSize + $rowSize > AuditLog::PAYLOAD_LIMIT_BYTES) {
+                    $chunks[] = $current;
+                    $current = [];
+                    $currentSize = 0;
+                }
+                $current[] = $row;
+                $currentSize += $rowSize;
             }
-            AuditLog::record(AuditAction::Create, $this->model->getTable(), '', null, $after);
+            if ($current !== []) {
+                $chunks[] = $current;
+            }
+
+            foreach ($chunks as $chunk) {
+                AuditLog::record(
+                    AuditAction::Create,
+                    $this->model->getTable(),
+                    '',
+                    null,
+                    ['count' => count($chunk), 'rows' => $chunk],
+                );
+            }
         }
 
         return $ok;
@@ -137,9 +159,10 @@ class AuditableQueryBuilder extends Builder
     }
 
     /**
-     * True when the model save internals (performUpdate / performDeleteOnModel)
-     * are the caller — the Auditable trait flips $savePathActive around both,
-     * and those paths are audited by the model-event hooks already.
+     * True when the model save internals (performUpdate / performDeleteOnModel
+     * / performInsert) are the caller — the Auditable trait flips
+     * $savePathActive around all three, and those paths are audited by the
+     * model-event hooks already.
      */
     private function fromSavePath(): bool
     {
