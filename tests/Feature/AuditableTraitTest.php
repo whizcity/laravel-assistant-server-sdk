@@ -395,6 +395,73 @@ final class AuditableTraitTest extends TestCase
         $this->assertSame(100, $total);
         $this->assertSame(range(1, 100), $seenIds);
     }
+
+    public function test_mass_update_of_multiple_rows_is_recorded_as_one_statement_row(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        TestAuditSubject::create(['title' => '订单一', 'status' => 'draft']);
+        TestAuditSubject::create(['title' => '订单二', 'status' => 'draft']);
+
+        TestAuditSubject::query()->where('id', '>', 0)->update(['status' => 'paid']);
+
+        // 2 hook creates + 1 merged update statement row.
+        $this->assertCount(3, AuditLog::all());
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('update', $row->action);
+        $this->assertSame('audit_subjects', $row->resource);
+        $this->assertSame('', $row->resource_id);
+        $this->assertNull($row->before);
+        $this->assertSame([
+            'count' => 2,
+            'rows'  => [
+                '1' => ['before' => ['status' => 'draft'], 'after' => ['status' => 'paid']],
+                '2' => ['before' => ['status' => 'draft'], 'after' => ['status' => 'paid']],
+            ],
+        ], $row->after);
+    }
+
+    public function test_oversized_mass_update_is_chunked(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+
+        // Bypass the hooks: DB::table never triggers model events.
+        DB::table('audit_subjects')->insert(
+            collect(range(1, 100))->map(fn ($i) => [
+                'id'     => $i,
+                'title'  => str_repeat('好', 60),
+                'status' => 'paid',
+            ])->all()
+        );
+
+        TestAuditSubject::query()->where('id', '>', 0)->update(['title' => str_repeat('长', 900)]);
+
+        $logs = AuditLog::query()->where('action', 'update')->get();
+        $this->assertGreaterThan(1, count($logs));
+
+        $total = 0;
+        $seenIds = [];
+        foreach ($logs as $log) {
+            // Server-side budget check: json.dumps(ensure_ascii=False) UTF-8 bytes.
+            $this->assertLessThanOrEqual(16384, strlen(json_encode($log->after, JSON_UNESCAPED_UNICODE)));
+
+            foreach ($log->after['rows'] as $id => $pair) {
+                $seenIds[] = (int) $id;
+                $total++;
+                $this->assertSame(
+                    ['before' => ['title' => str_repeat('好', 60)], 'after' => ['title' => str_repeat('长', 900)]],
+                    $pair
+                );
+            }
+        }
+
+        $this->assertSame(100, $total);
+        $this->assertSame(range(1, 100), $seenIds);
+
+        // DB::table bypass → no hook creates in this test.
+        $this->assertCount(0, AuditLog::query()->where('action', 'create')->get());
+    }
 }
 
 final class TestAuditSubject extends Model

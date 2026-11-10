@@ -38,11 +38,40 @@ class AuditableQueryBuilder extends Builder
 
         if ($shouldAudit) {
             $after = $this->model->auditFilterPayload($values) ?: [];
+
+            if (count($beforeRows) === 1) {
+                // A one-row statement keeps the per-row shape with resource_id = key.
+                foreach ($beforeRows as $key => $image) {
+                    if ($image === null || $image === $after) {
+                        continue; // payload emptied by sensitive-field filtering or no real change: skip
+                    }
+                    AuditLog::record(AuditAction::Update, $this->model->getTable(), $key, $image, $after);
+                }
+
+                return $affected;
+            }
+
+            // Multi-row update records ONE statement event per chunk:
+            // rows = {id: {before: image without PK, after: new values}}.
+            $entries = [];
             foreach ($beforeRows as $key => $image) {
                 if ($image === null || $image === $after) {
                     continue; // payload emptied by sensitive-field filtering or no real change: skip
                 }
-                AuditLog::record(AuditAction::Update, $this->model->getTable(), $key, $image, $after);
+                $entries[$key] = ['before' => $image, 'after' => $after];
+            }
+            if ($entries === []) {
+                return $affected;
+            }
+
+            foreach ($this->chunkRows($entries) as $chunk) {
+                AuditLog::record(
+                    AuditAction::Update,
+                    $this->model->getTable(),
+                    '',
+                    null,
+                    ['count' => count($chunk), 'rows' => $chunk]
+                );
             }
         }
 
@@ -162,7 +191,8 @@ class AuditableQueryBuilder extends Builder
      * Group rows so one audit event's after payload stays inside the 16KB
      * collector budget (AuditLog::PAYLOAD_LIMIT_BYTES). Keys are preserved:
      * inserts re-index (array_values) into a row list, deletes keep the
-     * id-keyed map. Used by both insert() chunking and delete() merging.
+     * id-keyed image map, updates keep the id-keyed {before, after} map.
+     * Used by insert() chunking, delete() merging and update() merging.
      *
      * @return array<int, array<string, mixed>>
      */
