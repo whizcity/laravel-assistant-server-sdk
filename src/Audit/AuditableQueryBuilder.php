@@ -66,11 +66,26 @@ class AuditableQueryBuilder extends Builder
         $affected = parent::delete();
 
         if ($shouldAudit) {
-            foreach ($beforeRows as $key => $image) {
-                if ($image === null) {
-                    continue;
+            if (count($beforeRows) === 1) {
+                // A one-row statement keeps the per-row shape with resource_id = key.
+                foreach ($beforeRows as $key => $image) {
+                    if ($image === null) {
+                        continue;
+                    }
+                    AuditLog::record(AuditAction::Delete, $this->model->getTable(), $key, $image, null);
                 }
-                AuditLog::record(AuditAction::Delete, $this->model->getTable(), $key, $image, null);
+            } else {
+                // Multi-row delete records ONE statement event (keys as the rows map),
+                // chunked when the combined payload would exceed the 16KB collector budget.
+                foreach ($this->chunkRows($beforeRows) as $chunk) {
+                    AuditLog::record(
+                        AuditAction::Delete,
+                        $this->model->getTable(),
+                        '',
+                        null,
+                        ['count' => count($chunk), 'rows' => $chunk],
+                    );
+                }
             }
         }
 
@@ -110,22 +125,7 @@ class AuditableQueryBuilder extends Builder
                 return $ok;
             }
 
-            $chunks = []; // rows grouped so one event's after stays under the 16KB budget
-            $current = [];
-            $currentSize = 0;
-            foreach ($rows as $row) {
-                $rowSize = strlen(json_encode($row, JSON_UNESCAPED_UNICODE)) + 16;
-                if ($current !== [] && $currentSize + $rowSize > AuditLog::PAYLOAD_LIMIT_BYTES) {
-                    $chunks[] = $current;
-                    $current = [];
-                    $currentSize = 0;
-                }
-                $current[] = $row;
-                $currentSize += $rowSize;
-            }
-            if ($current !== []) {
-                $chunks[] = $current;
-            }
+            $chunks = $this->chunkRows($rows);
 
             foreach ($chunks as $chunk) {
                 AuditLog::record(
@@ -133,7 +133,7 @@ class AuditableQueryBuilder extends Builder
                     $this->model->getTable(),
                     '',
                     null,
-                    ['count' => count($chunk), 'rows' => $chunk],
+                    ['count' => count($chunk), 'rows' => array_values($chunk)],
                 );
             }
         }
@@ -156,6 +156,36 @@ class AuditableQueryBuilder extends Builder
         }
 
         return $id;
+    }
+
+    /**
+     * Group rows so one audit event's after payload stays inside the 16KB
+     * collector budget (AuditLog::PAYLOAD_LIMIT_BYTES). Keys are preserved:
+     * inserts re-index (array_values) into a row list, deletes keep the
+     * id-keyed map. Used by both insert() chunking and delete() merging.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function chunkRows(array $rows): array
+    {
+        $chunks = [];
+        $current = [];
+        $currentSize = 0;
+        foreach ($rows as $key => $row) {
+            $rowSize = strlen(json_encode($row, JSON_UNESCAPED_UNICODE)) + 16;
+            if ($current !== [] && $currentSize + $rowSize > AuditLog::PAYLOAD_LIMIT_BYTES) {
+                $chunks[] = $current;
+                $current = [];
+                $currentSize = 0;
+            }
+            $current[$key] = $row;
+            $currentSize += $rowSize;
+        }
+        if ($current !== []) {
+            $chunks[] = $current;
+        }
+
+        return $chunks;
     }
 
     /**

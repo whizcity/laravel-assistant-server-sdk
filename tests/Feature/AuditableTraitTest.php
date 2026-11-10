@@ -343,6 +343,58 @@ final class AuditableTraitTest extends TestCase
 
         AuditLog::record('update', 'audit_subjects', '4', null, null);
     }
+
+    public function test_mass_delete_of_multiple_rows_is_recorded_as_one_statement_row(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        TestAuditSubject::create(['title' => '订单一', 'status' => 'draft']);
+        TestAuditSubject::create(['title' => '订单二', 'status' => 'draft']);
+
+        TestAuditSubject::query()->where('id', '>', 0)->delete();
+
+        $this->assertCount(3, AuditLog::all()); // 2 hook creates + 1 merged delete
+
+        $row = AuditLog::query()->latest('id')->first();
+        $this->assertSame('delete', $row->action);
+        $this->assertSame('audit_subjects', $row->resource);
+        $this->assertSame('', $row->resource_id);
+        $this->assertNull($row->before);
+        $this->assertSame([
+            'count' => 2,
+            'rows'  => [
+                '1' => ['title' => '订单一', 'status' => 'draft'],
+                '2' => ['title' => '订单二', 'status' => 'draft'],
+            ],
+        ], $row->after);
+    }
+
+    public function test_oversized_mass_delete_is_chunked(): void
+    {
+        $this->actor(['id' => '9', 'nickname' => '张三']);
+        DB::table('audit_subjects')->insert(collect(range(1, 100))->map(
+            fn ($i) => ['id' => $i, 'title' => str_repeat('好', 60), 'status' => 'paid']
+        )->all());
+
+        TestAuditSubject::query()->where('id', '>', 0)->delete();
+
+        $logs = AuditLog::query()->where('action', 'delete')->get();
+        $this->assertGreaterThan(1, $logs->count());
+
+        $seenIds = [];
+        $total = 0;
+        foreach ($logs as $log) {
+            // Server-side budget check: json.dumps(ensure_ascii=False) UTF-8 bytes.
+            $this->assertLessThanOrEqual(16384, strlen(json_encode($log->after, JSON_UNESCAPED_UNICODE)));
+            foreach ($log->after['rows'] as $id => $image) {
+                $seenIds[] = (int) $id;
+                $total++;
+                $this->assertSame(['title' => str_repeat('好', 60), 'status' => 'paid'], $image);
+            }
+        }
+
+        $this->assertSame(100, $total);
+        $this->assertSame(range(1, 100), $seenIds);
+    }
 }
 
 final class TestAuditSubject extends Model
